@@ -7,6 +7,8 @@
 package zlog
 
 import (
+	"context"
+	"fmt"
 	"io"
 	"sync/atomic"
 
@@ -70,7 +72,39 @@ func (lw *multiHandler) Enabled(level slog.Level) bool {
 
 type Logger struct{ *slog.Logger }
 
+type contextKey struct{}
+
+func NewContext(ctx context.Context, logger Logger) context.Context {
+	if logger.Logger == nil {
+		return ctx
+	}
+	return context.WithValue(slog.NewContext(ctx, logger.Logger), contextKey{}, logger)
+}
+func FromContext(ctx context.Context) Logger {
+	if lgr, ok := ctx.Value(contextKey{}).(Logger); ok {
+		return lgr
+	}
+	return Logger{Logger: slog.FromContext(ctx)}
+}
+
 const callDepth = 0
+
+func (lgr Logger) Log(keyvals ...interface{}) error {
+	var msg string
+	for i := 0; i < len(keyvals)-1; i++ {
+		if keyvals[i] == "msg" {
+			var ok bool
+			if msg, ok = keyvals[i+1].(string); !ok {
+				msg = fmt.Sprintf("%v", keyvals[i+1])
+			}
+			keyvals[i], keyvals[i+1] = keyvals[0], keyvals[1]
+			keyvals = keyvals[2:]
+			break
+		}
+	}
+	lgr.Info(msg, keyvals...)
+	return nil
+}
 
 func (lgr Logger) Info(msg string, args ...any) {
 	if lgr.Logger != nil && lgr.Logger.Enabled(slog.InfoLevel) {
