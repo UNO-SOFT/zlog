@@ -70,9 +70,16 @@ func (lw *multiHandler) Enabled(level slog.Level) bool {
 
 type Logger struct{ *slog.Logger }
 
+const callDepth = 0
+
+func (lgr Logger) Info(msg string, args ...any) {
+	if lgr.Logger != nil && lgr.Logger.Enabled(slog.InfoLevel) {
+		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, args...)
+	}
+}
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	if lgr.Logger != nil && lgr.Logger.Enabled(slog.ErrorLevel) {
-		lgr.Logger.Error(msg, err, args...)
+	if lgr.Logger != nil {
+		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, args...)
 	}
 }
 func (lgr Logger) V(off int) Logger {
