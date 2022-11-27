@@ -113,7 +113,7 @@ func (lgr Logger) Info(msg string, args ...any) {
 }
 func (lgr Logger) Error(err error, msg string, args ...any) {
 	if lgr.Logger != nil {
-		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, args...)
+		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
 	}
 }
 func (lgr Logger) V(off int) Logger {
