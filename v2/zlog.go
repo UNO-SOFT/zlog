@@ -16,29 +16,48 @@ import (
 	"golang.org/x/term"
 )
 
+var _ slog.Leveler = LogrLevel(0)
+
+// LogrLevel is an slog.Leveler that converts from github.com/go-logr/logr levels to slog levels.
+type LogrLevel int
+
+// Level returns the slog.Level, converted from the logr level.
+func (l LogrLevel) Level() slog.Level { return slog.InfoLevel }
+
+/*
+	DebugLevel Level = -4
+	InfoLevel  Level = 0
+	WarnLevel  Level = 4
+	ErrorLevel Level = 8
+*/
 const (
-	TraceLevel = 7 - slog.DebugLevel
-	InfoLevel  = 7 - slog.InfoLevel
-	ErrorLevel = 7 - slog.ErrorLevel
+	TraceLevel = LogrLevel(1)
+	InfoLevel  = LogrLevel(0)
+	ErrorLevel = LogrLevel(-1)
 )
 
-var _ = slog.Handler((*multiHandler)(nil))
+var _ = slog.Handler((*MultiHandler)(nil))
 
-type multiHandler struct{ ws atomic.Value }
+// MultiHandler writes to all the specified handlers.
+//
+// goroutine-safe.
+type MultiHandler struct{ ws atomic.Value }
 
 // NewMultiHandler returns a new slog.Handler that writes to all the specified Handlers.
-func NewMultiHandler(hs ...slog.Handler) *multiHandler {
-	lw := multiHandler{}
+func NewMultiHandler(hs ...slog.Handler) *MultiHandler {
+	lw := MultiHandler{}
 	lw.ws.Store(hs)
 	return &lw
 }
 
 // Add an additional writer to the targets.
-func (lw *multiHandler) Add(w slog.Handler) { lw.ws.Store(append(lw.ws.Load().([]slog.Handler), w)) }
+func (lw *MultiHandler) Add(w slog.Handler) { lw.ws.Store(append(lw.ws.Load().([]slog.Handler), w)) }
 
 // Swap the current writers with the defined.
-func (lw *multiHandler) Swap(ws ...slog.Handler) { lw.ws.Store(ws) }
-func (lw *multiHandler) Handle(r slog.Record) error {
+func (lw *MultiHandler) Swap(ws ...slog.Handler) { lw.ws.Store(ws) }
+
+// Handle the record.
+func (lw *MultiHandler) Handle(r slog.Record) error {
 	var firstErr error
 	for _, h := range lw.ws.Load().([]slog.Handler) {
 		if err := h.Handle(r); err != nil && firstErr == nil {
@@ -47,21 +66,27 @@ func (lw *multiHandler) Handle(r slog.Record) error {
 	}
 	return firstErr
 }
-func (lw *multiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+
+// WithAttrs returns a new slog.Handler with the given attrs set on all underlying handlers.
+func (lw *MultiHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	hs := append([]slog.Handler(nil), lw.ws.Load().([]slog.Handler)...)
 	for i, h := range hs {
 		hs[i] = h.WithAttrs(attrs)
 	}
 	return NewMultiHandler(hs...)
 }
-func (lw *multiHandler) WithGroup(name string) slog.Handler {
+
+// WithGroup returns a new slog.Handler with the given group set on all underlying handlers.
+func (lw *MultiHandler) WithGroup(name string) slog.Handler {
 	hs := append([]slog.Handler(nil), lw.ws.Load().([]slog.Handler)...)
 	for i, h := range hs {
 		hs[i] = h.WithGroup(name)
 	}
 	return NewMultiHandler(hs...)
 }
-func (lw *multiHandler) Enabled(level slog.Level) bool {
+
+// Enabled reports whether any of the underlying handlers is enabled for the given level.
+func (lw *MultiHandler) Enabled(level slog.Level) bool {
 	for _, h := range lw.ws.Load().([]slog.Handler) {
 		if h.Enabled(level) {
 			return true
@@ -70,25 +95,35 @@ func (lw *multiHandler) Enabled(level slog.Level) bool {
 	return false
 }
 
-type Logger struct{ *slog.Logger }
+// Logger is a helper type for logr.Logger -like slog.Logger.
+type Logger struct{ p atomic.Pointer[slog.Logger] }
+
+func (lgr Logger) load() *slog.Logger { return lgr.p.Load() }
 
 type contextKey struct{}
 
+// NewContext returns a new context with the given logger embedded.
 func NewContext(ctx context.Context, logger Logger) context.Context {
-	if logger.Logger == nil {
+	lgr := logger.load()
+	if lgr == nil {
 		return ctx
 	}
-	return context.WithValue(slog.NewContext(ctx, logger.Logger), contextKey{}, logger)
+	return context.WithValue(slog.NewContext(ctx, lgr), contextKey{}, logger)
 }
+
+// FromContext returns the Logger embedded into the Context, or the default logger otherwise.
 func FromContext(ctx context.Context) Logger {
 	if lgr, ok := ctx.Value(contextKey{}).(Logger); ok {
 		return lgr
 	}
-	return Logger{Logger: slog.FromContext(ctx)}
+	var lgr Logger
+	lgr.p.Store(slog.FromContext(ctx))
+	return lgr
 }
 
 const callDepth = 0
 
+// Log emulates go-kit/log.
 func (lgr Logger) Log(keyvals ...interface{}) error {
 	var msg string
 	for i := 0; i < len(keyvals)-1; i++ {
@@ -106,61 +141,92 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 	return nil
 }
 
+// Info calls Info if enabled.
 func (lgr Logger) Info(msg string, args ...any) {
-	if lgr.Logger != nil && lgr.Logger.Enabled(slog.InfoLevel) {
-		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, args...)
+	if l := lgr.load(); l != nil && l.Enabled(slog.InfoLevel) {
+		l.LogDepth(callDepth, slog.InfoLevel, msg, args...)
 	}
 }
+
+// Error calls Info with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	if lgr.Logger != nil {
-		lgr.Logger.LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
+	if l := lgr.load(); l != nil {
+		l.LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
 	}
 }
+
+// V offsets the logging levels by off (emulates logr.Logger.V).
 func (lgr Logger) V(off int) Logger {
-	if lgr.Logger == nil {
+	if off == 0 {
 		return lgr
 	}
-	h := lgr.Logger.Handler()
-	level := slog.Level(7)
+	l := lgr.load()
+	if l == nil {
+		return lgr
+	}
+	h := l.Handler()
+	level := slog.InfoLevel
 	if lh, ok := h.(*LevelHandler); ok {
 		level = lh.level.Level()
 	}
-	return Logger{Logger: slog.New(&LevelHandler{level: level - slog.Level(off), handler: h})}
-}
-func (lgr Logger) WithValues(args ...any) Logger {
-	if lgr.Logger == nil {
+	{
+		lgr := Logger{}
+		lgr.p.Store(slog.New(&LevelHandler{level: level - slog.Level(off), handler: h}))
 		return lgr
 	}
-	return Logger{Logger: lgr.Logger.With(args...)}
 }
-func (lgr Logger) SetLevel(level slog.Level) {
-	if lh, ok := lgr.Logger.Handler().(*LevelHandler); ok {
-		lh.SetLevel(slog.Level(level))
+
+// WithValues emulates logr.Logger.WithValues with slog.WithAttrs.
+func (lgr Logger) WithValues(args ...any) Logger {
+	l := lgr.load()
+	if l == nil {
+		return lgr
+	}
+	{
+		lgr := Logger{}
+		lgr.p.Store(l.With(args...))
+		return lgr
 	}
 }
-func (lgr Logger) SetOutput(w io.Writer) {
-	lgr.Logger = New(w).Logger
-}
-func (lgr Logger) SetHandler(h slog.Handler) {
-	lgr.Logger = slog.New(h)
+
+// SetLevel on the underlying LevelHandler.
+func (lgr Logger) SetLevel(level slog.Leveler) {
+	if l := lgr.load(); l != nil {
+		if lh, ok := l.Handler().(*LevelHandler); ok {
+			lh.SetLevel(slog.Level(level.Level()))
+		}
+	}
 }
 
+// SetOutput sets the output to a new Logger.
+func (lgr Logger) SetOutput(w io.Writer) { lgr.p.Store(New(w).load()) }
+
+// SetHandler sets the Handler.
+func (lgr Logger) SetHandler(h slog.Handler) { lgr.p.Store(slog.New(h)) }
+
+// SetLevel sets the level on the given Logger.
 func SetLevel(lgr Logger, level slog.Level) { lgr.SetLevel(level) }
-func SetOutput(lgr Logger, w io.Writer)     { lgr.SetOutput(w) }
+
+// SetOutput sets the output on the given Logger.
+func SetOutput(lgr Logger, w io.Writer) { lgr.SetOutput(w) }
+
+// SetHandler sets the handler on the given Logger.
 func SetHandler(lgr Logger, h slog.Handler) { lgr.SetHandler(h) }
 
-// NewZerolog returns a new zerolog.Logger writing to w.
-func NewLogger(h slog.Handler) Logger { return Logger{Logger: slog.New(h)} }
+// NewLogger returns a new Logger writing to w.
+func NewLogger(h slog.Handler) Logger {
+	var lgr Logger
+	lgr.p.Store(slog.New(h))
+	return lgr
+}
 
-// New returns a new logr.Logger writing to w as a zerolog.Logger,
-// at InfoLevel.
+// New returns a new logr.Logger writing to w as a zerolog.Logger, at InfoLevel.
 func New(w io.Writer) Logger {
 	return NewLogger(NewLevelHandler(&slog.LevelVar{}, MaybeConsoleHandler(w)))
 }
 
-var DefaultHandlerOptions = slog.HandlerOptions{
-	AddSource: true,
-}
+// DefaultHandlerOptions adds the source.
+var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
 
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
 func MaybeConsoleHandler(w io.Writer) slog.Handler {
@@ -200,6 +266,8 @@ func NewLevelHandler(level slog.Leveler, h slog.Handler) *LevelHandler {
 func (h *LevelHandler) Enabled(level slog.Level) bool {
 	return level >= h.level.Level()
 }
+
+// SetLevel on the LevelHandler.
 func (h *LevelHandler) SetLevel(level slog.Level) {
 	if lv, ok := h.level.(interface{ Set(l slog.Level) }); ok {
 		lv.Set(level)
