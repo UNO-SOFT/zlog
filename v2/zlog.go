@@ -12,6 +12,7 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/go-logr/logr"
 	"golang.org/x/exp/slog"
 	"golang.org/x/term"
 )
@@ -98,17 +99,21 @@ func (lw *MultiHandler) Enabled(level slog.Level) bool {
 // Logger is a helper type for logr.Logger -like slog.Logger.
 type Logger struct{ p atomic.Pointer[slog.Logger] }
 
-func (lgr Logger) load() *slog.Logger { return lgr.p.Load() }
+func (lgr Logger) load() *slog.Logger {
+	if l := lgr.p.Load(); l != nil {
+		return l
+	}
+	if l := slog.Default(); l != nil {
+		return l
+	}
+	return slog.New(slog.NewJSONHandler(io.Discard))
+}
 
 type contextKey struct{}
 
 // NewContext returns a new context with the given logger embedded.
 func NewContext(ctx context.Context, logger Logger) context.Context {
-	lgr := logger.load()
-	if lgr == nil {
-		return ctx
-	}
-	return context.WithValue(slog.NewContext(ctx, lgr), contextKey{}, logger)
+	return context.WithValue(slog.NewContext(ctx, logger.load()), contextKey{}, logger)
 }
 
 // FromContext returns the Logger embedded into the Context, or the default logger otherwise.
@@ -143,16 +148,14 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 
 // Info calls Info if enabled.
 func (lgr Logger) Info(msg string, args ...any) {
-	if l := lgr.load(); l != nil && l.Enabled(slog.InfoLevel) {
+	if l := lgr.load(); l.Enabled(slog.InfoLevel) {
 		l.LogDepth(callDepth, slog.InfoLevel, msg, args...)
 	}
 }
 
 // Error calls Info with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	if l := lgr.load(); l != nil {
-		l.LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
-	}
+	lgr.load().LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).
@@ -160,42 +163,38 @@ func (lgr Logger) V(off int) Logger {
 	if off == 0 {
 		return lgr
 	}
-	l := lgr.load()
-	if l == nil {
-		return lgr
-	}
-	h := l.Handler()
+	h := lgr.load().Handler()
 	level := slog.InfoLevel
 	if lh, ok := h.(*LevelHandler); ok {
 		level = lh.level.Level()
 	}
-	{
-		lgr := Logger{}
-		lgr.p.Store(slog.New(&LevelHandler{level: level - slog.Level(off), handler: h}))
-		return lgr
-	}
+	lgr2 := Logger{}
+	lgr2.p.Store(slog.New(&LevelHandler{level: level - slog.Level(off), handler: h}))
+	return lgr2
 }
 
 // WithValues emulates logr.Logger.WithValues with slog.WithAttrs.
 func (lgr Logger) WithValues(args ...any) Logger {
-	l := lgr.load()
-	if l == nil {
-		return lgr
-	}
-	{
-		lgr := Logger{}
-		lgr.p.Store(l.With(args...))
-		return lgr
-	}
+	lgr2 := Logger{}
+	lgr2.p.Store(lgr.load().With(args...))
+	return lgr2
 }
 
 // SetLevel on the underlying LevelHandler.
 func (lgr Logger) SetLevel(level slog.Leveler) {
-	if l := lgr.load(); l != nil {
-		if lh, ok := l.Handler().(*LevelHandler); ok {
-			lh.SetLevel(slog.Level(level.Level()))
-		}
+	if lh, ok := lgr.load().Handler().(*LevelHandler); ok {
+		lh.SetLevel(slog.Level(level.Level()))
 	}
+}
+
+// WithName implements logr.WithName with slog.WithGroup
+func (lgr Logger) WithName(s string) Logger { return lgr.WithGroup(s) }
+
+// WithGroup is slog.WithGroup
+func (lgr Logger) WithGroup(s string) Logger {
+	lgr2 := Logger{}
+	lgr2.p.Store(lgr.load().WithGroup(s))
+	return lgr2
 }
 
 // SetOutput sets the output to a new Logger.
@@ -204,8 +203,51 @@ func (lgr Logger) SetOutput(w io.Writer) { lgr.p.Store(New(w).load()) }
 // SetHandler sets the Handler.
 func (lgr Logger) SetHandler(h slog.Handler) { lgr.p.Store(slog.New(h)) }
 
+// SLog returns the underlying slog.Logger
+func (lgr Logger) SLog() *slog.Logger { return lgr.load() }
+
+// AsLogr returns a go-logr/logr.Logger, using this Logger as LogSink
+func (lgr Logger) AsLogr() logr.Logger { return logr.New(SLogSink{lgr.SLog()}) }
+
+type SLogSink struct{ *slog.Logger }
+
+// Init receives optional information about the logr library for LogSink
+// implementations that need it.
+func (ls SLogSink) Init(info logr.RuntimeInfo) {}
+
+// Enabled tests whether this LogSink is enabled at the specified V-level.
+// For example, commandline flags might be used to set the logging
+// verbosity and disable some info logs.
+func (ls SLogSink) Enabled(level int) bool { return ls.Logger.Enabled(LogrLevel(level).Level()) }
+
+// Info logs a non-error message with the given key/value pairs as context.
+// The level argument is provided for optional logging.  This method will
+// only be called when Enabled(level) is true. See Logger.Info for more
+// details.
+func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
+	ls.Logger.Info(msg, keysAndValues...)
+}
+
+// Error logs an error, with the given message and key/value pairs as
+// context.  See Logger.Error for more details.
+func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
+	ls.Logger.Error(msg, err, keysAndValues...)
+}
+
+// WithValues returns a new LogSink with additional key/value pairs.  See
+// Logger.WithValues for more details.
+func (ls SLogSink) WithValues(keysAndValues ...interface{}) logr.LogSink {
+	return SLogSink{ls.Logger.With(keysAndValues...)}
+}
+
+// WithName returns a new LogSink with the specified name appended.  See
+// Logger.WithName for more details.
+func (ls SLogSink) WithName(name string) logr.LogSink { return SLogSink{ls.Logger.WithGroup(name)} }
+
+var _ logr.LogSink = SLogSink{}
+
 // SetLevel sets the level on the given Logger.
-func SetLevel(lgr Logger, level slog.Level) { lgr.SetLevel(level) }
+func SetLevel(lgr Logger, level slog.Leveler) { lgr.SetLevel(level) }
 
 // SetOutput sets the output on the given Logger.
 func SetOutput(lgr Logger, w io.Writer) { lgr.SetOutput(w) }
@@ -268,9 +310,9 @@ func (h *LevelHandler) Enabled(level slog.Level) bool {
 }
 
 // SetLevel on the LevelHandler.
-func (h *LevelHandler) SetLevel(level slog.Level) {
+func (h *LevelHandler) SetLevel(level slog.Leveler) {
 	if lv, ok := h.level.(interface{ Set(l slog.Level) }); ok {
-		lv.Set(level)
+		lv.Set(level.Level())
 	}
 }
 
