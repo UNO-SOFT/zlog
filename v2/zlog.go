@@ -273,7 +273,9 @@ var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
 func MaybeConsoleHandler(w io.Writer) slog.Handler {
 	if IsTerminal(w) {
-		return DefaultHandlerOptions.NewTextHandler(w)
+		opts := DefaultHandlerOptions
+		opts.AddSource = false
+		return opts.NewTextHandler(w)
 	}
 	return DefaultHandlerOptions.NewJSONHandler(w)
 }
