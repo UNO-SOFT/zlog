@@ -72,7 +72,7 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 		return a
 	}
 	return &ConsoleHandler{
-		UseColor:       IsTerminal(w),
+		UseColor:       true,
 		HandlerOptions: opts,
 
 		w:           w,
