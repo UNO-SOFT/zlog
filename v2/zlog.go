@@ -23,17 +23,17 @@ var _ slog.Leveler = LogrLevel(0)
 type LogrLevel int
 
 // Level returns the slog.Level, converted from the logr level.
-func (l LogrLevel) Level() slog.Level { return slog.InfoLevel }
+func (l LogrLevel) Level() slog.Level { return slog.LevelInfo }
 
 /*
 	DebugLevel Level = -4
-	InfoLevel  Level = 0
+	LevelInfo  Level = 0
 	WarnLevel  Level = 4
 	ErrorLevel Level = 8
 */
 const (
 	TraceLevel = LogrLevel(1)
-	InfoLevel  = LogrLevel(0)
+	LevelInfo  = LogrLevel(0)
 	ErrorLevel = LogrLevel(-1)
 )
 
@@ -148,14 +148,14 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 
 // Info calls Info if enabled.
 func (lgr Logger) Info(msg string, args ...any) {
-	if l := lgr.load(); l.Enabled(slog.InfoLevel) {
-		l.LogDepth(callDepth, slog.InfoLevel, msg, args...)
+	if l := lgr.load(); l.Enabled(slog.LevelInfo) {
+		l.LogDepth(callDepth, slog.LevelInfo, msg, args...)
 	}
 }
 
 // Error calls Info with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	lgr.load().LogDepth(callDepth, slog.ErrorLevel, msg, append(args, slog.Any("error", err))...)
+	lgr.load().LogDepth(callDepth, slog.LevelError, msg, append(args, slog.Any("error", err))...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).
@@ -164,7 +164,7 @@ func (lgr Logger) V(off int) Logger {
 		return lgr
 	}
 	h := lgr.load().Handler()
-	level := slog.InfoLevel
+	level := slog.LevelInfo
 	if lh, ok := h.(*LevelHandler); ok {
 		level = lh.level.Level()
 	}
@@ -262,7 +262,7 @@ func NewLogger(h slog.Handler) Logger {
 	return lgr
 }
 
-// New returns a new logr.Logger writing to w as a zerolog.Logger, at InfoLevel.
+// New returns a new logr.Logger writing to w as a zerolog.Logger, at LevelInfo.
 func New(w io.Writer) Logger {
 	return NewLogger(NewLevelHandler(&slog.LevelVar{}, MaybeConsoleHandler(w)))
 }
@@ -273,9 +273,7 @@ var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
 func MaybeConsoleHandler(w io.Writer) slog.Handler {
 	if IsTerminal(w) {
-		opts := DefaultHandlerOptions
-		opts.AddSource = false
-		return opts.NewTextHandler(w)
+		return NewConsoleHandler(w)
 	}
 	return DefaultHandlerOptions.NewJSONHandler(w)
 }
