@@ -18,15 +18,21 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+// DefaultTimeFormat is a "precise" KitchenTime.
+const DefaultTimeFormat = "15:04:05.999"
+
 var (
-	TimeFormat = "15:04:05.999"
+	// TimeFormat is the format used to print the time (padded with zeros if it is the DefaultTimeFormat).
+	TimeFormat = DefaultTimeFormat
 
 	_, callerFile, _, _ = runtime.Caller(0)
-	rootPath            = filepath.Dir(callerFile)
+	rootPath            = filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(callerFile))))) + string([]rune{filepath.Separator})
+	emptyAttr           = slog.Attr{Key: "", Value: slog.StringValue("")}
+	nilValue            = slog.StringValue("")
 )
 
 func trimRootPath(p string) string {
-	return strings.Replace(p, rootPath, ".", 1)
+	return strings.TrimPrefix(p, rootPath)
 }
 
 // ConsoleHandler prints to the console
@@ -50,7 +56,11 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 		switch a.Key {
 		case "time", "level", "source", "msg":
 			// These are handled directly
-			return slog.Attr{}
+			return emptyAttr
+		default:
+			if a.Value.Kind() == slog.AnyKind && a.Value.Any() == nil {
+				return slog.Attr{Key: a.Key, Value: nilValue}
+			}
 		}
 		return a
 	}
@@ -63,10 +73,12 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 	}
 }
 
+// Enabled implements slog.Handler.Enabled.
 func (h *ConsoleHandler) Enabled(level slog.Level) bool { return h.textHandler.Enabled(level) }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
 
+// Handle implements slog.Handler.Handle.
 func (h *ConsoleHandler) Handle(r slog.Record) error {
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
@@ -74,6 +86,11 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 		bufPool.Put(buf)
 	}()
 	buf.WriteString(r.Time.Format(TimeFormat))
+	if TimeFormat == DefaultTimeFormat {
+		for n := len(DefaultTimeFormat) - buf.Len(); n > 0; n-- {
+			buf.WriteByte('0')
+		}
+	}
 	buf.WriteString(" ")
 
 	var level string
@@ -115,6 +132,7 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	return h.textHandler.Handle(r)
 }
 
+// WithAttrs implements slog.Handler.WithAttrs.
 func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	return &ConsoleHandler{
 		UseColor:       h.UseColor,
@@ -124,6 +142,7 @@ func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	}
 }
 
+// WithGroup implements slog.Handler.WithGroup.
 func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
 	return &ConsoleHandler{
 		UseColor:       h.UseColor,
@@ -133,8 +152,10 @@ func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
 	}
 }
 
+// Color is a color.
 type Color uint8
 
+// Colors
 const (
 	Black Color = iota + 30
 	Red

@@ -318,6 +318,9 @@ func (h *LevelHandler) SetLevel(level slog.Leveler) {
 
 // Handle implements Handler.Handle.
 func (h *LevelHandler) Handle(r slog.Record) error {
+	if h == nil || h.handler == nil {
+		return nil
+	}
 	return h.handler.Handle(r)
 }
 
