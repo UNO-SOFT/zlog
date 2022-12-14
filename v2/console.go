@@ -33,7 +33,7 @@ var (
 )
 
 func trimRootPath(p string) string {
-	fmt.Printf("\ntrimRootPath(%q) modPart=%d srcPart=%d\n", p, strings.Index(p, modPart), strings.Index(p, srcPart))
+	//fmt.Printf("\ntrimRootPath(%q) modPart=%d srcPart=%d\n", p, strings.Index(p, modPart), strings.Index(p, srcPart))
 	if i := strings.Index(p, modPart); i >= 0 && strings.IndexByte(p[i+len(modPart):], '@') >= 0 {
 		return p[i+len(modPart):]
 	} else if i := strings.Index(p, srcPart); i >= 0 {
