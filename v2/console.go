@@ -26,13 +26,19 @@ var (
 	TimeFormat = DefaultTimeFormat
 
 	_, callerFile, _, _ = runtime.Caller(0)
-	rootPath            = filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(callerFile))))) + string([]rune{filepath.Separator})
+	pathSep             = string([]rune{filepath.Separator})
+	modPart, srcPart    = pathSep + "mod" + pathSep, pathSep + "src" + pathSep
 	emptyAttr           = slog.Attr{Key: "", Value: slog.StringValue("")}
 	nilValue            = slog.StringValue("")
 )
 
 func trimRootPath(p string) string {
-	return strings.TrimPrefix(p, rootPath)
+	if i := strings.Index(p, modPart); i >= 0 && strings.IndexByte(p[i+len(modPart):], '@') >= 0 {
+		return p[i+len(modPart):]
+	} else if i := strings.Index(p, srcPart); i >= 0 {
+		return p[i+len(srcPart):]
+	}
+	return p
 }
 
 // ConsoleHandler prints to the console
