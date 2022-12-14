@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,14 +24,16 @@ var (
 	// TimeFormat is the format used to print the time (padded with zeros if it is the DefaultTimeFormat).
 	TimeFormat = DefaultTimeFormat
 
-	_, callerFile, _, _ = runtime.Caller(0)
-	pathSep             = string([]rune{filepath.Separator})
-	modPart, srcPart    = pathSep + "mod" + pathSep, pathSep + "src" + pathSep
-	emptyAttr           = slog.Attr{Key: "", Value: slog.StringValue("")}
-	nilValue            = slog.StringValue("")
+	pathSep = string([]rune{filepath.Separator})
+	modPart = pathSep + "mod" + pathSep
+	srcPart = pathSep + "src" + pathSep
+
+	emptyAttr = slog.Attr{Key: "", Value: slog.StringValue("")}
+	nilValue  = slog.StringValue("")
 )
 
 func trimRootPath(p string) string {
+	fmt.Printf("\ntrimRootPath(%q) modPart=%d srcPart=%d\n", p, strings.Index(p, modPart), strings.Index(p, srcPart))
 	if i := strings.Index(p, modPart); i >= 0 && strings.IndexByte(p[i+len(modPart):], '@') >= 0 {
 		return p[i+len(modPart):]
 	} else if i := strings.Index(p, srcPart); i >= 0 {
