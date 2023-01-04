@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"sync/atomic"
+	"testing"
 
 	"github.com/go-logr/logr"
 	"golang.org/x/exp/slog"
@@ -214,6 +215,7 @@ func (lgr Logger) SLog() *slog.Logger { return lgr.load() }
 // AsLogr returns a go-logr/logr.Logger, using this Logger as LogSink
 func (lgr Logger) AsLogr() logr.Logger { return logr.New(SLogSink{lgr.SLog()}) }
 
+// SLogSink is an logr.LogSink for an slog.Logger.
 type SLogSink struct{ *slog.Logger }
 
 // Init receives optional information about the logr library for LogSink
@@ -344,3 +346,20 @@ func (h *LevelHandler) WithGroup(name string) slog.Handler {
 
 // Handler returns the Handler wrapped by h.
 func (h *LevelHandler) Handler() slog.Handler { return h.handler }
+
+type testWriter struct {
+	T interface {
+		Log(...any)
+		Logf(string, ...any)
+	}
+}
+
+var _ = io.Writer(testWriter{})
+
+// NewT return a new text writer for a testing.T
+func NewT(t testing.TB) Logger { return NewLogger(slog.NewTextHandler(testWriter{T: t})) }
+
+func (t testWriter) Write(p []byte) (int, error) {
+	t.T.Log(string(p))
+	return len(p), nil
+}
