@@ -106,7 +106,9 @@ func (lgr Logger) load() *slog.Logger {
 	if l := slog.Default(); l != nil {
 		return l
 	}
-	return slog.New(slog.NewJSONHandler(io.Discard))
+	return slog.New(slog.HandlerOptions{
+		Level: slog.LevelError,
+	}.NewJSONHandler(io.Discard))
 }
 
 type contextKey struct{}
@@ -130,6 +132,9 @@ const callDepth = 0
 
 // Log emulates go-kit/log.
 func (lgr Logger) Log(keyvals ...interface{}) error {
+	if !lgr.load().Enabled(slog.LevelInfo) {
+		return nil
+	}
 	var msg string
 	for i := 0; i < len(keyvals)-1; i++ {
 		if keyvals[i] == "msg" {
@@ -168,14 +173,14 @@ func (lgr Logger) V(off int) Logger {
 	if lh, ok := h.(*LevelHandler); ok {
 		level = lh.level.Level()
 	}
-	lgr2 := Logger{}
+	var lgr2 Logger
 	lgr2.p.Store(slog.New(&LevelHandler{level: level - slog.Level(off), handler: h}))
 	return lgr2
 }
 
 // WithValues emulates logr.Logger.WithValues with slog.WithAttrs.
 func (lgr Logger) WithValues(args ...any) Logger {
-	lgr2 := Logger{}
+	var lgr2 Logger
 	lgr2.p.Store(lgr.load().With(args...))
 	return lgr2
 }
@@ -192,7 +197,7 @@ func (lgr Logger) WithName(s string) Logger { return lgr.WithGroup(s) }
 
 // WithGroup is slog.WithGroup
 func (lgr Logger) WithGroup(s string) Logger {
-	lgr2 := Logger{}
+	var lgr2 Logger
 	lgr2.p.Store(lgr.load().WithGroup(s))
 	return lgr2
 }
@@ -264,7 +269,10 @@ func NewLogger(h slog.Handler) Logger {
 
 // New returns a new logr.Logger writing to w as a zerolog.Logger, at LevelInfo.
 func New(w io.Writer) Logger {
-	return NewLogger(NewLevelHandler(&slog.LevelVar{}, MaybeConsoleHandler(w)))
+	return NewLogger(NewLevelHandler(
+		&slog.LevelVar{},
+		MaybeConsoleHandler(w),
+	))
 }
 
 // DefaultHandlerOptions adds the source.
@@ -335,6 +343,4 @@ func (h *LevelHandler) WithGroup(name string) slog.Handler {
 }
 
 // Handler returns the Handler wrapped by h.
-func (h *LevelHandler) Handler() slog.Handler {
-	return h.handler
-}
+func (h *LevelHandler) Handler() slog.Handler { return h.handler }
