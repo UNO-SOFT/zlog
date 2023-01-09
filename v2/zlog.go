@@ -129,7 +129,7 @@ func FromContext(ctx context.Context) Logger {
 	return lgr
 }
 
-const callDepth = 0
+const callDepth = 1
 
 // Log emulates go-kit/log.
 func (lgr Logger) Log(keyvals ...interface{}) error {
