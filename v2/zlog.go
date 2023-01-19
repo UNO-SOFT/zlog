@@ -10,6 +10,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -27,10 +28,10 @@ type LogrLevel int
 func (l LogrLevel) Level() slog.Level { return slog.LevelInfo }
 
 /*
-	DebugLevel Level = -4
-	LevelInfo  Level = 0
-	WarnLevel  Level = 4
-	ErrorLevel Level = 8
+DebugLevel Level = -4
+LevelInfo  Level = 0
+WarnLevel  Level = 4
+ErrorLevel Level = 8
 */
 const (
 	TraceLevel = LogrLevel(1)
@@ -107,6 +108,17 @@ func (lgr Logger) load() *slog.Logger {
 	if l := slog.Default(); l != nil {
 		return l
 	}
+	return discard()
+}
+
+// Discard returns a Logger that does not log at all.
+func Discard() Logger {
+	var lgr Logger
+	lgr.p.Store(discard())
+	return lgr
+}
+
+func discard() *slog.Logger {
 	return slog.New(slog.HandlerOptions{
 		Level: slog.LevelError,
 	}.NewJSONHandler(io.Discard))
@@ -362,4 +374,20 @@ func NewT(t testing.TB) Logger { return NewLogger(slog.NewTextHandler(testWriter
 func (t testWriter) Write(p []byte) (int, error) {
 	t.T.Log(string(p))
 	return len(p), nil
+}
+
+// SyncWriter syncs each Write.
+type SyncWriter struct {
+	w  io.Writer
+	mu sync.Mutex
+}
+
+var _ = io.Writer((*SyncWriter)(nil))
+
+// NewSyncWriter returns an io.Writer that syncs each io.Write
+func NewSyncWriter(w io.Writer) *SyncWriter { return &SyncWriter{w: w} }
+func (sw *SyncWriter) Write(p []byte) (int, error) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+	return sw.w.Write(p)
 }

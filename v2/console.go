@@ -49,7 +49,6 @@ type ConsoleHandler struct {
 
 	mu          sync.Mutex
 	textHandler slog.Handler
-	buf         bytes.Buffer
 	w           io.Writer
 }
 
