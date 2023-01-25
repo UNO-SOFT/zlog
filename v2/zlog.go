@@ -141,8 +141,6 @@ func FromContext(ctx context.Context) Logger {
 	return lgr
 }
 
-const callDepth = 1
-
 // Log emulates go-kit/log.
 func (lgr Logger) Log(keyvals ...interface{}) error {
 	if !lgr.load().Enabled(slog.LevelInfo) {
@@ -164,10 +162,12 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 	return nil
 }
 
+const callDepth int = 1
+
 // Info calls Info if enabled.
 func (lgr Logger) Info(msg string, args ...any) {
 	if l := lgr.load(); l.Enabled(slog.LevelInfo) {
-		l.LogDepth(callDepth, slog.LevelInfo, msg, args...)
+		l.LogDepth(callDepth, slog.LevelInfo, msg, append(args, slog.Int("callDepth", callDepth))...)
 	}
 }
 
@@ -244,13 +244,13 @@ func (ls SLogSink) Enabled(level int) bool { return ls.Logger.Enabled(LogrLevel(
 // only be called when Enabled(level) is true. See Logger.Info for more
 // details.
 func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
-	ls.Logger.Info(msg, keysAndValues...)
+	ls.Logger.LogDepth(callDepth+1, slog.LevelInfo, msg, keysAndValues...)
 }
 
 // Error logs an error, with the given message and key/value pairs as
 // context.  See Logger.Error for more details.
 func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
-	ls.Logger.Error(msg, err, keysAndValues...)
+	ls.Logger.LogDepth(callDepth+1, slog.LevelError, msg, append(keysAndValues, slog.Any(slog.ErrorKey, err))...)
 }
 
 // WithValues returns a new LogSink with additional key/value pairs.  See
