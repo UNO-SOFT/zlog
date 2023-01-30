@@ -7,9 +7,11 @@ package zlog
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -64,7 +66,7 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 			// These are handled directly
 			return emptyAttr
 		default:
-			if a.Value.Kind() == slog.AnyKind && a.Value.Any() == nil {
+			if a.Value.Kind() == slog.KindAny && a.Value.Any() == nil {
 				return slog.Attr{Key: a.Key, Value: nilValue}
 			}
 		}
@@ -80,7 +82,9 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 }
 
 // Enabled implements slog.Handler.Enabled.
-func (h *ConsoleHandler) Enabled(level slog.Level) bool { return h.textHandler.Enabled(level) }
+func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.textHandler.Enabled(ctx, level)
+}
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
 
@@ -115,8 +119,9 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	buf.WriteString(level)
 	buf.WriteString(" ")
 
-	if h.AddSource {
-		file, line := r.SourceLine()
+	if h.AddSource && r.PC != 0 {
+		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
+		file, line := frame.File, frame.Line
 		if file != "" {
 			buf.WriteByte('[')
 			buf.WriteString(trimRootPath(file))

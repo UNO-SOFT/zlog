@@ -89,9 +89,9 @@ func (lw *MultiHandler) WithGroup(name string) slog.Handler {
 }
 
 // Enabled reports whether any of the underlying handlers is enabled for the given level.
-func (lw *MultiHandler) Enabled(level slog.Level) bool {
+func (lw *MultiHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	for _, h := range lw.ws.Load().([]slog.Handler) {
-		if h.Enabled(level) {
+		if h.Enabled(ctx, level) {
 			return true
 		}
 	}
@@ -128,7 +128,7 @@ type contextKey struct{}
 
 // NewContext returns a new context with the given logger embedded.
 func NewContext(ctx context.Context, logger Logger) context.Context {
-	return context.WithValue(slog.NewContext(ctx, logger.load()), contextKey{}, logger)
+	return context.WithValue(ctx, contextKey{}, logger)
 }
 
 // FromContext returns the Logger embedded into the Context, or the default logger otherwise.
@@ -137,7 +137,7 @@ func FromContext(ctx context.Context) Logger {
 		return lgr
 	}
 	var lgr Logger
-	lgr.p.Store(slog.FromContext(ctx))
+	lgr.p.Store(slog.Default())
 	return lgr
 }
 
@@ -327,7 +327,7 @@ func NewLevelHandler(level slog.Leveler, h slog.Handler) *LevelHandler {
 
 // Enabled implements Handler.Enabled by reporting whether
 // level is at least as large as h's level.
-func (h *LevelHandler) Enabled(level slog.Level) bool {
+func (h *LevelHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return level >= h.level.Level()
 }
 
