@@ -167,7 +167,7 @@ const callDepth int = 1
 // Info calls Info if enabled.
 func (lgr Logger) Info(msg string, args ...any) {
 	if l := lgr.load(); l.Enabled(slog.LevelInfo) {
-		l.LogDepth(callDepth, slog.LevelInfo, msg, append(args, slog.Int("callDepth", callDepth))...)
+		l.LogDepth(callDepth, slog.LevelInfo, msg, args...)
 	}
 }
 
