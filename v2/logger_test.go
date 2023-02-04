@@ -16,6 +16,24 @@ import (
 	"golang.org/x/exp/slog"
 )
 
+func TestLoggerLevel(t *testing.T) {
+	var buf strings.Builder
+	logger := zlog.New(&buf)
+	t.Logf("SetLevel(%v)", zlog.ErrorLevel)
+	logger.SetLevel(zlog.ErrorLevel)
+	t.Logf("logger: %#v slog: %#v level: %v",
+		logger,
+		logger.SLog(),
+		logger.SLog().Handler().(*zlog.LevelHandler).GetLevel())
+	logger.Info("info")
+	logger.Error(io.EOF, "error")
+	t.Log(buf.String())
+	recs := parse(strings.NewReader(buf.String()))
+	if !check(t, recs, map[string]int{"info": 0, "error": 1}) {
+		return
+	}
+}
+
 func TestLogrLevel(t *testing.T) {
 	var buf strings.Builder
 	zlogger := zerolog.New(&buf).Level(zerolog.ErrorLevel)
@@ -35,19 +53,6 @@ func TestSLogLevel(t *testing.T) {
 	logger := slog.New(slog.HandlerOptions{Level: slog.LevelError}.NewJSONHandler(&buf))
 	logger.Info("info")
 	logger.Error("error", io.EOF)
-	t.Log(buf.String())
-	recs := parse(strings.NewReader(buf.String()))
-	if !check(t, recs, map[string]int{"info": 0, "error": 1}) {
-		return
-	}
-}
-
-func TestLoggerLevel(t *testing.T) {
-	var buf strings.Builder
-	logger := zlog.New(&buf)
-	logger.SetLevel(zlog.ErrorLevel)
-	logger.Info("info")
-	logger.Error(io.EOF, "error")
 	t.Log(buf.String())
 	recs := parse(strings.NewReader(buf.String()))
 	if !check(t, recs, map[string]int{"info": 0, "error": 1}) {

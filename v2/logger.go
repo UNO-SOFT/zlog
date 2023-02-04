@@ -119,7 +119,9 @@ func (lgr Logger) WithValues(args ...any) Logger {
 // SetLevel on the underlying LevelHandler.
 func (lgr Logger) SetLevel(level slog.Leveler) {
 	if lh, ok := lgr.load().Handler().(*LevelHandler); ok {
-		lh.SetLevel(slog.Level(level.Level()))
+		lh.SetLevel(level)
+	} else {
+		lgr.p.Store(slog.New(&LevelHandler{level: level, handler: lgr.load().Handler()}))
 	}
 }
 

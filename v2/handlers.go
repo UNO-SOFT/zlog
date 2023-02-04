@@ -22,7 +22,7 @@ var _ slog.Leveler = LogrLevel(0)
 type LogrLevel int
 
 // Level returns the slog.Level, converted from the logr level.
-func (l LogrLevel) Level() slog.Level { return slog.LevelInfo }
+func (l LogrLevel) Level() slog.Level { return -slog.Level(l << 1) }
 
 /*
 DebugLevel Level = -4
@@ -31,9 +31,10 @@ WarnLevel  Level = 4
 ErrorLevel Level = 8
 */
 const (
-	TraceLevel = LogrLevel(1)
-	LevelInfo  = LogrLevel(0)
-	ErrorLevel = LogrLevel(-1)
+	TraceLevel = slog.LevelDebug - 1
+	DebugLevel = slog.LevelDebug
+	InfoLevel  = slog.LevelInfo
+	ErrorLevel = slog.LevelError
 )
 
 var _ = slog.Handler((*MultiHandler)(nil))
@@ -122,8 +123,12 @@ func (h *LevelHandler) Enabled(ctx context.Context, level slog.Level) bool {
 func (h *LevelHandler) SetLevel(level slog.Leveler) {
 	if lv, ok := h.level.(interface{ Set(l slog.Level) }); ok {
 		lv.Set(level.Level())
+	} else {
+		h.level = level.Level()
 	}
 }
+
+func (h *LevelHandler) GetLevel() slog.Leveler { return h.level }
 
 // Handle implements Handler.Handle.
 func (h *LevelHandler) Handle(r slog.Record) error {
