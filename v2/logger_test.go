@@ -11,9 +11,38 @@ import (
 	"testing"
 
 	"github.com/UNO-SOFT/zlog/v2"
+	"github.com/go-logr/zerologr"
+	"github.com/rs/zerolog"
+	"golang.org/x/exp/slog"
 )
 
-func TestLogLevel(t *testing.T) {
+func TestLogrLevel(t *testing.T) {
+	var buf strings.Builder
+	zlogger := zerolog.New(&buf).Level(zerolog.ErrorLevel)
+	zerolog.MessageFieldName = "msg"
+	logger := zerologr.New(&zlogger)
+	logger.Info("info")
+	logger.Error(io.EOF, "error")
+	t.Log(buf.String())
+	recs := parse(strings.NewReader(buf.String()))
+	if !check(t, recs, map[string]int{"info": 0, "error": 1}) {
+		return
+	}
+}
+
+func TestSLogLevel(t *testing.T) {
+	var buf strings.Builder
+	logger := slog.New(slog.HandlerOptions{Level: slog.LevelError}.NewJSONHandler(&buf))
+	logger.Info("info")
+	logger.Error("error", io.EOF)
+	t.Log(buf.String())
+	recs := parse(strings.NewReader(buf.String()))
+	if !check(t, recs, map[string]int{"info": 0, "error": 1}) {
+		return
+	}
+}
+
+func TestLoggerLevel(t *testing.T) {
 	var buf strings.Builder
 	logger := zlog.New(&buf)
 	logger.SetLevel(zlog.ErrorLevel)
