@@ -8,8 +8,10 @@ package zlog
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/go-logr/logr"
@@ -205,6 +207,34 @@ func NewLogger(h slog.Handler) Logger {
 func New(w io.Writer) Logger {
 	return NewLogger(NewLevelHandler(
 		&slog.LevelVar{},
-		MaybeConsoleHandler(w),
+		MaybeConsoleHandler(InfoLevel, w),
 	))
+}
+
+var _ slog.Leveler = (*VerboseVar)(nil)
+var _ flag.Value = (*VerboseVar)(nil)
+
+type VerboseVar bool
+
+func (vv *VerboseVar) Level() slog.Level {
+	if vv != nil && *vv {
+		return slog.LevelInfo
+	}
+	return slog.LevelWarn
+}
+
+func (vv *VerboseVar) IsBoolFlag() bool { return true }
+func (vv *VerboseVar) String() string {
+	if vv != nil && *vv {
+		return "true"
+	}
+	return "false"
+}
+func (vv *VerboseVar) Set(s string) error {
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return err
+	}
+	*vv = VerboseVar(b)
+	return nil
 }

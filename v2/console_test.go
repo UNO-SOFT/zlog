@@ -10,7 +10,7 @@ import (
 )
 
 func TestConsole(t *testing.T) {
-	logHandler := zlog.NewConsoleHandler(os.Stderr)
+	logHandler := zlog.NewConsoleHandler(zlog.InfoLevel, os.Stderr)
 
 	logger := slog.New(logHandler)
 	logger.Debug("Debug message", "hello", "world", "bad kv")

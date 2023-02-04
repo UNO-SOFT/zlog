@@ -56,8 +56,9 @@ type ConsoleHandler struct {
 }
 
 // NewConsoleHandler returns a new ConsoleHandler which writes to w.
-func NewConsoleHandler(w io.Writer) *ConsoleHandler {
+func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 	opts := DefaultConsoleHandlerOptions
+	opts.Level = level
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) != 0 {
 			return a
@@ -89,11 +90,13 @@ var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
 var DefaultConsoleHandlerOptions = slog.HandlerOptions{}
 
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
-func MaybeConsoleHandler(w io.Writer) slog.Handler {
+func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
 	if IsTerminal(w) {
-		return NewConsoleHandler(w)
+		return NewConsoleHandler(level, w)
 	}
-	return DefaultHandlerOptions.NewJSONHandler(w)
+	opts := DefaultHandlerOptions
+	opts.Level = level
+	return opts.NewJSONHandler(w)
 }
 
 // IsTerminal returns whether the io.Writer is a terminal or not.
@@ -106,7 +109,7 @@ func IsTerminal(w io.Writer) bool {
 
 // Enabled implements slog.Handler.Enabled.
 func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.textHandler.Enabled(ctx, level)
+	return h.HandlerOptions.Level.Level() <= level && h.textHandler.Enabled(ctx, level)
 }
 
 var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
