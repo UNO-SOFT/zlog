@@ -60,7 +60,11 @@ func (lw *MultiHandler) Swap(ws ...slog.Handler) { lw.ws.Store(ws) }
 // Handle the record.
 func (lw *MultiHandler) Handle(r slog.Record) error {
 	var firstErr error
+	ctx := context.Background()
 	for _, h := range lw.ws.Load().([]slog.Handler) {
+		if !h.Enabled(ctx, r.Level) {
+			continue
+		}
 		if err := h.Handle(r); err != nil && firstErr == nil {
 			firstErr = err
 		}
