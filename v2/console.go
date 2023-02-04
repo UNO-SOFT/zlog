@@ -57,7 +57,7 @@ type ConsoleHandler struct {
 
 // NewConsoleHandler returns a new ConsoleHandler which writes to w.
 func NewConsoleHandler(w io.Writer) *ConsoleHandler {
-	opts := DefaultHandlerOptions
+	opts := DefaultConsoleHandlerOptions
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) != 0 {
 			return a
@@ -84,6 +84,9 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 
 // DefaultHandlerOptions adds the source.
 var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
+
+// DefaultConsoleHandlerOptions *does not* add the source.
+var DefaultConsoleHandlerOptions = slog.HandlerOptions{}
 
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
 func MaybeConsoleHandler(w io.Writer) slog.Handler {
@@ -115,7 +118,8 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 		buf.Reset()
 		bufPool.Put(buf)
 	}()
-	buf.WriteString(r.Time.Format(TimeFormat))
+	tmp := make([]byte, 0, len(TimeFormat)+len(r.Message))
+	buf.Write(r.Time.AppendFormat(tmp[:0], TimeFormat))
 	if TimeFormat == DefaultTimeFormat {
 		for n := len(DefaultTimeFormat) - buf.Len(); n > 0; n-- {
 			buf.WriteByte('0')
@@ -151,7 +155,7 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 		}
 	}
 
-	buf.WriteString(r.Message)
+	buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
 	buf.WriteByte(' ')
 
 	h.mu.Lock()

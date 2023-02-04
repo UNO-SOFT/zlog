@@ -34,6 +34,38 @@ func TestLoggerLevel(t *testing.T) {
 	}
 }
 
+func TestMultiHandlerLevel(t *testing.T) {
+	var bufInfo, bufAll strings.Builder
+	zl := zlog.NewLevelHandler(zlog.ErrorLevel, slog.NewJSONHandler(&bufInfo))
+	zlMulti := zlog.NewMultiHandler(zl)
+	logger := zlog.NewLogger(zlMulti)
+	zlMulti.Add(slog.NewJSONHandler(&bufAll))
+	//t.Logf("SetLevel(%v)", zlog.ErrorLevel)
+	//logger.SetLevel(zlog.ErrorLevel)
+	t.Logf("logger: %#v slog: %#v",
+		logger,
+		logger.SLog())
+	logger.Info("info")
+	logger.Error(io.EOF, "error")
+
+	t.Log(bufAll.String())
+	if !check(t,
+		parse(strings.NewReader(bufAll.String())),
+		map[string]int{"info": 1, "error": 1},
+	) {
+		return
+	}
+
+	t.Log(bufInfo.String())
+	if !check(t,
+		parse(strings.NewReader(bufInfo.String())),
+		map[string]int{"info": 0, "error": 1},
+	) {
+		return
+	}
+
+}
+
 func TestLogrLevel(t *testing.T) {
 	var buf strings.Builder
 	zlogger := zerolog.New(&buf).Level(zerolog.ErrorLevel)
