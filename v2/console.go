@@ -17,6 +17,7 @@ import (
 	"sync"
 
 	"golang.org/x/exp/slog"
+	"golang.org/x/term"
 )
 
 // DefaultTimeFormat is a "precise" KitchenTime.
@@ -79,6 +80,25 @@ func NewConsoleHandler(w io.Writer) *ConsoleHandler {
 		w:           w,
 		textHandler: opts.NewTextHandler(w),
 	}
+}
+
+// DefaultHandlerOptions adds the source.
+var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
+
+// MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
+func MaybeConsoleHandler(w io.Writer) slog.Handler {
+	if IsTerminal(w) {
+		return NewConsoleHandler(w)
+	}
+	return DefaultHandlerOptions.NewJSONHandler(w)
+}
+
+// IsTerminal returns whether the io.Writer is a terminal or not.
+func IsTerminal(w io.Writer) bool {
+	if fder, ok := w.(interface{ Fd() uintptr }); ok {
+		return term.IsTerminal(int(fder.Fd()))
+	}
+	return false
 }
 
 // Enabled implements slog.Handler.Enabled.
