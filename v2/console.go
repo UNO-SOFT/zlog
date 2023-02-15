@@ -69,13 +69,14 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 			return a
 		}
 		switch a.Key {
-		case "time", "level", "source", "msg":
+		case "", "time", "level", "source", "msg":
 			// These are handled directly
 			return emptyAttr
 		default:
 			if a.Value.Kind() == slog.KindAny && a.Value.Any() == nil {
-				return slog.Attr{Key: a.Key, Value: nilValue}
+				return emptyAttr
 			}
+			return slog.Attr{Key: a.Key, Value: nilValue}
 		}
 		return a
 	}
