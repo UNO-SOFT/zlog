@@ -116,7 +116,7 @@ var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]
 
 // Handle implements slog.Handler.Handle.
 func (h *ConsoleHandler) Handle(r slog.Record) error {
-	if h == nil || h.textHandler == nil {
+	if h == nil {
 		return nil
 	}
 	buf := bufPool.Get().(*bytes.Buffer)
@@ -169,6 +169,9 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	_, err := h.w.Write(buf.Bytes())
 	if err != nil {
 		return err
+	}
+	if h.textHandler == nil || r.NumAttrs() == 0 {
+		return nil
 	}
 	r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
 	defer func() {
