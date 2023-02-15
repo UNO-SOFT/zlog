@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -38,7 +37,6 @@ var (
 	srcPart = pathSep + "src" + pathSep
 
 	emptyAttr = slog.Attr{Key: "", Value: slog.StringValue("")}
-	nilValue  = slog.StringValue("")
 )
 
 func trimRootPath(p string) string {
@@ -73,11 +71,6 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 		case "time", "level", "source", "msg":
 			// These are handled directly
 			return emptyAttr
-		default:
-			if a.Value.Kind() == slog.KindAny && a.Value.Any() == nil || reflect.ValueOf(a.Value).Kind() == reflect.Slice && reflect.ValueOf(a.Value).Len() == 0 {
-				return emptyAttr
-			}
-			return slog.Attr{Key: a.Key, Value: nilValue}
 		}
 		return a
 	}
@@ -86,7 +79,7 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 		HandlerOptions: opts,
 
 		w:           w,
-		textHandler: opts.NewTextHandler(w),
+		textHandler: opts.NewJSONHandler(w),
 	}
 }
 
