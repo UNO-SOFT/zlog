@@ -1,3 +1,7 @@
+// Copyright 2022, 2023 Tamás Gulácsi. All rights reserved.
+//
+// SPDX-License-Identifier: Apache-2.0
+
 package zlog
 
 // Mostly copied from https://gist.github.com/wijayaerick/de3de10c47a79d5310968ba5ff101a19
@@ -15,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/exp/slog"
 	"golang.org/x/term"
@@ -116,6 +121,9 @@ var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]
 
 // Handle implements slog.Handler.Handle.
 func (h *ConsoleHandler) Handle(r slog.Record) error {
+	if h == nil || h.textHandler == nil {
+		return nil
+	}
 	buf := bufPool.Get().(*bytes.Buffer)
 	defer func() {
 		buf.Reset()
@@ -167,6 +175,7 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	if err != nil {
 		return err
 	}
+	r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
 	return h.textHandler.Handle(r)
 }
 
