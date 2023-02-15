@@ -7,7 +7,7 @@ require (
 	github.com/go-logr/zerologr v1.2.2
 	github.com/rs/zerolog v1.29.0
 	github.com/tgulacsi/go v0.24.3
-	golang.org/x/exp v0.0.0-20230130191013-ac48d9c7dd6e
+	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 	golang.org/x/term v0.4.0
 )
 

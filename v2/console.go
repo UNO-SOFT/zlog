@@ -176,6 +176,12 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 		return err
 	}
 	r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("r: %#v", r)
+			fmt.Printf("PANIC: %+v", r)
+		}
+	}()
 	return h.textHandler.Handle(r)
 }
 
