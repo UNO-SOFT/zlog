@@ -56,13 +56,12 @@ type ConsoleHandler struct {
 
 	mu          sync.Mutex
 	textHandler slog.Handler
+	buf         bytes.Buffer
 	w           io.Writer
 }
 
-// NewConsoleHandler returns a new ConsoleHandler which writes to w.
-func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
+func newConsoleHandlerOptions() slog.HandlerOptions {
 	opts := DefaultConsoleHandlerOptions
-	opts.Level = level
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) != 0 {
 			return a
@@ -74,13 +73,21 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 		}
 		return a
 	}
-	return &ConsoleHandler{
+	return opts
+}
+
+// NewConsoleHandler returns a new ConsoleHandler which writes to w.
+func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
+	opts := newConsoleHandlerOptions()
+	opts.Level = level
+	h := ConsoleHandler{
 		UseColor:       true,
 		HandlerOptions: opts,
 
-		w:           w,
-		textHandler: opts.NewJSONHandler(w),
+		w: w,
 	}
+	h.textHandler = opts.NewJSONHandler(&h.buf)
+	return &h
 }
 
 // DefaultHandlerOptions adds the source.
@@ -119,19 +126,17 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	if h == nil {
 		return nil
 	}
-	buf := bufPool.Get().(*bytes.Buffer)
-	defer func() {
-		buf.Reset()
-		bufPool.Put(buf)
-	}()
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.buf.Reset()
 	tmp := make([]byte, 0, len(TimeFormat)+len(r.Message))
-	buf.Write(r.Time.AppendFormat(tmp[:0], TimeFormat))
+	h.buf.Write(r.Time.AppendFormat(tmp[:0], TimeFormat))
 	if TimeFormat == DefaultTimeFormat {
-		for n := len(DefaultTimeFormat) - buf.Len(); n > 0; n-- {
-			buf.WriteByte('0')
+		for n := len(DefaultTimeFormat) - h.buf.Len(); n > 0; n-- {
+			h.buf.WriteByte('0')
 		}
 	}
-	buf.WriteString(" ")
+	h.buf.WriteString(" ")
 
 	var level string
 	if r.Level < slog.LevelInfo {
@@ -146,60 +151,60 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	if h.UseColor {
 		level = addColorToLevel(level)
 	}
-	buf.WriteString(level)
-	buf.WriteString(" ")
+	h.buf.WriteString(level)
+	h.buf.WriteString(" ")
 
 	if h.AddSource && r.PC != 0 {
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
 		file, line := frame.File, frame.Line
 		if file != "" {
-			buf.WriteByte('[')
-			buf.WriteString(trimRootPath(file))
-			buf.WriteString(":")
-			buf.Write([]byte(strconv.Itoa(line)))
-			buf.WriteString("] ")
+			h.buf.WriteByte('[')
+			h.buf.WriteString(trimRootPath(file))
+			h.buf.WriteString(":")
+			h.buf.Write([]byte(strconv.Itoa(line)))
+			h.buf.WriteString("] ")
 		}
 	}
 
-	buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
-	buf.WriteByte(' ')
+	h.buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	_, err := h.w.Write(buf.Bytes())
-	if err != nil {
-		return err
+	var err error
+	if h.textHandler != nil && r.NumAttrs() != 0 {
+		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
+		h.buf.WriteString(" attrs=")
+		err = h.textHandler.Handle(r)
 	}
-	if h.textHandler == nil || r.NumAttrs() == 0 {
-		return nil
+
+	if _, wErr := h.w.Write(h.buf.Bytes()); wErr != nil && err == nil {
+		err = wErr
 	}
-	r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
-	defer func() {
-		if rec := recover(); rec != nil {
-			fmt.Printf("\nPANIC: %+v rec: %#v\n", rec, r)
-		}
-	}()
-	return h.textHandler.Handle(r)
+	return err
 }
 
 // WithAttrs implements slog.Handler.WithAttrs.
 func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &ConsoleHandler{
+	h2 := ConsoleHandler{
 		UseColor:       h.UseColor,
 		HandlerOptions: h.HandlerOptions,
 		w:              h.w,
-		textHandler:    h.textHandler.WithAttrs(attrs),
 	}
+	h2.textHandler = newConsoleHandlerOptions().
+		NewJSONHandler(&h2.buf).
+		WithAttrs(attrs)
+	return &h2
 }
 
 // WithGroup implements slog.Handler.WithGroup.
 func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
-	return &ConsoleHandler{
+	h2 := ConsoleHandler{
 		UseColor:       h.UseColor,
 		HandlerOptions: h.HandlerOptions,
 		w:              h.w,
-		textHandler:    h.textHandler.WithGroup(name),
 	}
+	h2.textHandler = newConsoleHandlerOptions().
+		NewJSONHandler(&h2.buf).
+		WithGroup(name)
+	return &h2
 }
 
 // Color is a color.

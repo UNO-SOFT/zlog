@@ -165,7 +165,9 @@ type testWriter struct {
 var _ = io.Writer(testWriter{})
 
 // NewT return a new text writer for a testing.T
-func NewT(t testing.TB) Logger { return NewLogger(slog.NewTextHandler(testWriter{T: t})) }
+func NewT(t testing.TB) Logger {
+	return NewLogger(NewConsoleHandler(TraceLevel, testWriter{T: t}))
+}
 
 func (t testWriter) Write(p []byte) (int, error) {
 	t.T.Log(string(p))

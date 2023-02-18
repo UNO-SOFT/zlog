@@ -2,7 +2,6 @@ package zlog_test
 
 import (
 	"errors"
-	"os"
 	"testing"
 
 	"github.com/UNO-SOFT/zlog/v2"
@@ -10,10 +9,11 @@ import (
 )
 
 func TestConsole(t *testing.T) {
-	logHandler := zlog.NewConsoleHandler(zlog.InfoLevel, os.Stderr)
+	logHandler := zlog.NewT(t).SLog().Handler()
 
 	logger := slog.New(logHandler)
 	logger.Debug("Debug message", "hello", "world", "bad kv")
+	logger.Info("no attrs")
 	logger = logger.
 		With("with_key_1", "with_value_1").
 		WithGroup("group_1").
