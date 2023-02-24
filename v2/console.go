@@ -119,8 +119,6 @@ func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
 	return h.HandlerOptions.Level.Level() <= level && h.textHandler.Enabled(ctx, level)
 }
 
-var bufPool = sync.Pool{New: func() interface{} { return bytes.NewBuffer(make([]byte, 0, 128)) }}
-
 // Handle implements slog.Handler.Handle.
 func (h *ConsoleHandler) Handle(r slog.Record) error {
 	if h == nil {
