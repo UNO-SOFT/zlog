@@ -120,7 +120,7 @@ func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 // Handle implements slog.Handler.Handle.
-func (h *ConsoleHandler) Handle(r slog.Record) error {
+func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	if h == nil {
 		return nil
 	}
@@ -170,7 +170,7 @@ func (h *ConsoleHandler) Handle(r slog.Record) error {
 	if h.textHandler != nil && r.NumAttrs() != 0 {
 		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
 		h.buf.WriteString(" attrs=")
-		err = h.textHandler.Handle(r)
+		err = h.textHandler.Handle(ctx, r)
 	}
 
 	if _, wErr := h.w.Write(h.buf.Bytes()); wErr != nil && err == nil {

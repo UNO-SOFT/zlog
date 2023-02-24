@@ -58,14 +58,13 @@ func (lw *MultiHandler) Add(w slog.Handler) { lw.ws.Store(append(lw.ws.Load().([
 func (lw *MultiHandler) Swap(ws ...slog.Handler) { lw.ws.Store(ws) }
 
 // Handle the record.
-func (lw *MultiHandler) Handle(r slog.Record) error {
+func (lw *MultiHandler) Handle(ctx context.Context, r slog.Record) error {
 	var firstErr error
-	ctx := context.Background()
 	for _, h := range lw.ws.Load().([]slog.Handler) {
 		if !h.Enabled(ctx, r.Level) {
 			continue
 		}
-		if err := h.Handle(r); err != nil && firstErr == nil {
+		if err := h.Handle(ctx, r); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -135,11 +134,11 @@ func (h *LevelHandler) SetLevel(level slog.Leveler) {
 func (h *LevelHandler) GetLevel() slog.Leveler { return h.level }
 
 // Handle implements Handler.Handle.
-func (h *LevelHandler) Handle(r slog.Record) error {
+func (h *LevelHandler) Handle(ctx context.Context, r slog.Record) error {
 	if h == nil || h.handler == nil {
 		return nil
 	}
-	return h.handler.Handle(r)
+	return h.handler.Handle(ctx, r)
 }
 
 // WithAttrs implements Handler.WithAttrs.

@@ -7,12 +7,12 @@ require (
 	github.com/go-logr/zerologr v1.2.2
 	github.com/rs/zerolog v1.29.0
 	github.com/tgulacsi/go v0.24.3
-	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
-	golang.org/x/term v0.4.0
+	golang.org/x/exp v0.0.0-20230223210539-50820d90acfd
+	golang.org/x/term v0.5.0
 )
 
 require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
-	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/sys v0.5.0 // indirect
 )
