@@ -63,7 +63,7 @@ func FromContext(ctx context.Context) Logger {
 
 // Log emulates go-kit/log.
 func (lgr Logger) Log(keyvals ...interface{}) error {
-	if !lgr.load().Enabled(slog.LevelInfo) {
+	if !lgr.load().Enabled(context.Background(), slog.LevelInfo) {
 		return nil
 	}
 	var msg string
@@ -82,18 +82,50 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 	return nil
 }
 
-const callDepth int = 1
-
-// Info calls Info if enabled.
-func (lgr Logger) Info(msg string, args ...any) {
-	if l := lgr.load(); l.Enabled(slog.LevelInfo) {
-		l.LogDepth(callDepth, slog.LevelInfo, msg, args...)
+func (lgr Logger) log(ctx context.Context, level slog.Level, msg string, args ...any) {
+	if l := lgr.load(); l.Enabled(ctx, level) {
+		l.Log(ctx, level, msg, args...)
 	}
 }
 
-// Error calls Info with ErrorLevel, always.
+// Debug calls Debug if enabled.
+func (lgr Logger) Debug(msg string, args ...any) {
+	lgr.log(context.Background(), slog.LevelDebug, msg, args...)
+}
+
+// DebugCtx calls DebugCtx if enabled.
+func (lgr Logger) DebugCtx(ctx context.Context, msg string, args ...any) {
+	lgr.log(ctx, slog.LevelDebug, msg, args...)
+}
+
+// Info calls Info if enabled.
+func (lgr Logger) Info(msg string, args ...any) {
+	lgr.log(context.Background(), slog.LevelInfo, msg, args...)
+}
+
+// InfoCtx calls InfoCtx if enabled.
+func (lgr Logger) InfoCtx(ctx context.Context, msg string, args ...any) {
+	lgr.log(ctx, slog.LevelInfo, msg, args...)
+}
+
+// Warn calls Warn if enabled.
+func (lgr Logger) Warn(msg string, args ...any) {
+	lgr.log(context.Background(), slog.LevelWarn, msg, args...)
+}
+
+// WarnCtx calls WarCtx if enabled.
+func (lgr Logger) WarnCtx(ctx context.Context, msg string, args ...any) {
+	lgr.log(ctx, slog.LevelWarn, msg, args...)
+}
+
+// Error calls Error with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	lgr.load().LogDepth(callDepth, slog.LevelError, msg, append(args, slog.Any("error", err))...)
+	lgr.load().Error(msg, err, args...)
+}
+
+// ErrorCtx calls Error with ErrorLevel, always.
+func (lgr Logger) ErrorCtx(ctx context.Context, err error, msg string, args ...any) {
+	lgr.load().ErrorCtx(ctx, msg, err, args...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).
@@ -146,8 +178,8 @@ func (lgr Logger) SetHandler(h slog.Handler) { lgr.p.Store(slog.New(h)) }
 // SLog returns the underlying slog.Logger
 func (lgr Logger) SLog() *slog.Logger { return lgr.load() }
 
-// AsLogr returns a go-logr/logr.Logger, using this Logger as LogSink
-func (lgr Logger) AsLogr() logr.Logger { return logr.New(SLogSink{lgr.SLog()}) }
+// Logr returns a go-logr/logr.Logger, using this Logger as LogSink
+func (lgr Logger) Logr() logr.Logger { return logr.New(SLogSink{lgr.SLog()}) }
 
 // SLogSink is an logr.LogSink for an slog.Logger.
 type SLogSink struct{ *slog.Logger }
@@ -159,20 +191,22 @@ func (ls SLogSink) Init(info logr.RuntimeInfo) {}
 // Enabled tests whether this LogSink is enabled at the specified V-level.
 // For example, commandline flags might be used to set the logging
 // verbosity and disable some info logs.
-func (ls SLogSink) Enabled(level int) bool { return ls.Logger.Enabled(LogrLevel(level).Level()) }
+func (ls SLogSink) Enabled(level int) bool {
+	return ls.Logger.Enabled(context.Background(), LogrLevel(level).Level())
+}
 
 // Info logs a non-error message with the given key/value pairs as context.
 // The level argument is provided for optional logging.  This method will
 // only be called when Enabled(level) is true. See Logger.Info for more
 // details.
 func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
-	ls.Logger.LogDepth(callDepth+1, slog.LevelInfo, msg, keysAndValues...)
+	ls.Logger.Log(context.Background(), slog.LevelInfo, msg, keysAndValues...)
 }
 
 // Error logs an error, with the given message and key/value pairs as
 // context.  See Logger.Error for more details.
 func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
-	ls.Logger.LogDepth(callDepth+1, slog.LevelError, msg, append(keysAndValues, slog.Any(slog.ErrorKey, err))...)
+	ls.Logger.Log(context.Background(), slog.LevelError, msg, append(keysAndValues, slog.Any(slog.ErrorKey, err))...)
 }
 
 // WithValues returns a new LogSink with additional key/value pairs.  See

@@ -4,10 +4,10 @@ go 1.19
 
 require (
 	github.com/go-logr/logr v1.2.3
-	github.com/go-logr/zerologr v1.2.2
+	github.com/go-logr/zerologr v1.2.3
 	github.com/rs/zerolog v1.29.0
 	github.com/tgulacsi/go v0.24.3
-	golang.org/x/exp v0.0.0-20230223210539-50820d90acfd
+	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2
 	golang.org/x/term v0.5.0
 )
 
