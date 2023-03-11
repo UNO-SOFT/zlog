@@ -120,12 +120,12 @@ func (lgr Logger) WarnCtx(ctx context.Context, msg string, args ...any) {
 
 // Error calls Error with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	lgr.load().Error(msg, err, args...)
+	lgr.load().Error(msg, append(args, slog.Any("error", err))...)
 }
 
 // ErrorCtx calls Error with ErrorLevel, always.
 func (lgr Logger) ErrorCtx(ctx context.Context, err error, msg string, args ...any) {
-	lgr.load().ErrorCtx(ctx, msg, err, args...)
+	lgr.load().ErrorCtx(ctx, msg, append(args, slog.Any("error", err))...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).
@@ -200,13 +200,13 @@ func (ls SLogSink) Enabled(level int) bool {
 // only be called when Enabled(level) is true. See Logger.Info for more
 // details.
 func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
-	ls.Logger.Log(context.Background(), slog.LevelInfo, msg, keysAndValues...)
+	ls.Logger.Info(msg, keysAndValues...)
 }
 
 // Error logs an error, with the given message and key/value pairs as
 // context.  See Logger.Error for more details.
 func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
-	ls.Logger.Log(context.Background(), slog.LevelError, msg, append(keysAndValues, slog.Any(slog.ErrorKey, err))...)
+	ls.Logger.Error(msg, err, keysAndValues)
 }
 
 // WithValues returns a new LogSink with additional key/value pairs.  See
