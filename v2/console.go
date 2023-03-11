@@ -103,7 +103,28 @@ func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
 	}
 	opts := DefaultHandlerOptions
 	opts.Level = level
-	return opts.NewJSONHandler(w)
+	if !opts.AddSource {
+		return opts.NewJSONHandler(w)
+	}
+	opts.AddSource = false
+	return &customSourceHandler{Handler: opts.NewJSONHandler(w)}
+}
+
+type customSourceHandler struct {
+	slog.Handler
+	buf bytes.Buffer
+}
+
+func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
+	if r.PC != 0 {
+		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
+		r.PC = 0
+		if file, line := frame.File, frame.Line; file != "" {
+			h.buf.Reset()
+			r.AddAttrs(slog.String("source", trimRootPath(file)+":"+strconv.Itoa(line)))
+		}
+	}
+	return h.Handler.Handle(ctx, r)
 }
 
 // IsTerminal returns whether the io.Writer is a terminal or not.
