@@ -51,7 +51,7 @@ func trimRootPath(p string) string {
 
 // ConsoleHandler prints to the console
 type ConsoleHandler struct {
-	slog.HandlerOptions
+	HandlerOptions
 	UseColor bool
 
 	mu          sync.Mutex
@@ -60,7 +60,10 @@ type ConsoleHandler struct {
 	w           io.Writer
 }
 
-func newConsoleHandlerOptions() slog.HandlerOptions {
+// HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
+type HandlerOptions struct{ slog.HandlerOptions }
+
+func newConsoleHandlerOptions() HandlerOptions {
 	opts := DefaultConsoleHandlerOptions
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
 		if len(groups) != 0 {
@@ -91,10 +94,10 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 }
 
 // DefaultHandlerOptions adds the source.
-var DefaultHandlerOptions = slog.HandlerOptions{AddSource: true}
+var DefaultHandlerOptions = HandlerOptions{HandlerOptions: slog.HandlerOptions{AddSource: true}}
 
 // DefaultConsoleHandlerOptions *does not* add the source.
-var DefaultConsoleHandlerOptions = slog.HandlerOptions{}
+var DefaultConsoleHandlerOptions = HandlerOptions{}
 
 // MaybeConsoleHandler returns an slog.JSONHandler if w is a terminal, and slog.TextHandler otherwise.
 func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
@@ -103,11 +106,7 @@ func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
 	}
 	opts := DefaultHandlerOptions
 	opts.Level = level
-	if !opts.AddSource {
-		return opts.NewJSONHandler(w)
-	}
-	opts.AddSource = false
-	return &customSourceHandler{Handler: opts.NewJSONHandler(w)}
+	return opts.NewJSONHandler(w)
 }
 
 type customSourceHandler struct {
@@ -115,10 +114,22 @@ type customSourceHandler struct {
 	buf bytes.Buffer
 }
 
+func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
+	o := opts.HandlerOptions
+	if !o.AddSource {
+		return o.NewJSONHandler(w)
+	}
+	o.AddSource = false
+	return &customSourceHandler{Handler: o.NewJSONHandler(w)}
+}
+
 func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
+	if !h.Handler.Enabled(ctx, r.Level) {
+		return nil
+	}
+	//fmt.Printf("customSourceHandler.Handle r=%+v PC=%d\n", r, r.PC)
 	if r.PC != 0 {
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
-		r.PC = 0
 		if file, line := frame.File, frame.Line; file != "" {
 			h.buf.Reset()
 			r.AddAttrs(slog.String("source", trimRootPath(file)+":"+strconv.Itoa(line)))

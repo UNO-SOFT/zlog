@@ -11,8 +11,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"runtime"
 	"strconv"
 	"sync/atomic"
+	"time"
 
 	"github.com/go-logr/logr"
 	"golang.org/x/exp/slog"
@@ -83,9 +85,19 @@ func (lgr Logger) Log(keyvals ...interface{}) error {
 }
 
 func (lgr Logger) log(ctx context.Context, level slog.Level, msg string, args ...any) {
-	if l := lgr.load(); l.Enabled(ctx, level) {
-		l.Log(ctx, level, msg, args...)
+	l := lgr.load()
+	if !l.Enabled(ctx, level) {
+		return
 	}
+	var pcs [1]uintptr
+	// skip [runtime.Callers, this function, this function's caller]
+	runtime.Callers(3, pcs[:])
+	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
+	r.Add(args...)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	_ = l.Handler().Handle(ctx, r)
 }
 
 // Debug calls Debug if enabled.
