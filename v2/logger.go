@@ -132,12 +132,12 @@ func (lgr Logger) WarnCtx(ctx context.Context, msg string, args ...any) {
 
 // Error calls Error with ErrorLevel, always.
 func (lgr Logger) Error(err error, msg string, args ...any) {
-	lgr.load().Error(msg, append(args, slog.Any("error", err))...)
+	lgr.load().Error(msg, append(args, slog.String("error", err.Error()))...)
 }
 
 // ErrorCtx calls Error with ErrorLevel, always.
 func (lgr Logger) ErrorCtx(ctx context.Context, err error, msg string, args ...any) {
-	lgr.load().ErrorCtx(ctx, msg, append(args, slog.Any("error", err))...)
+	lgr.load().ErrorCtx(ctx, msg, append(args, slog.String("error", err.Error()))...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).
