@@ -199,7 +199,10 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
 
 	var err error
-	if h.textHandler != nil && r.NumAttrs() != 0 {
+	var addEOL bool
+	if h.textHandler == nil || r.NumAttrs() == 0 {
+		addEOL = true
+	} else {
 		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
 		h.buf.WriteString(" attrs=")
 		err = h.textHandler.Handle(ctx, r)
@@ -207,6 +210,9 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	if _, wErr := h.w.Write(h.buf.Bytes()); wErr != nil && err == nil {
 		err = wErr
+	}
+	if addEOL {
+		h.w.Write([]byte{'\n'})
 	}
 	return err
 }
