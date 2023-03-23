@@ -260,27 +260,38 @@ func New(w io.Writer) Logger {
 var _ slog.Leveler = (*VerboseVar)(nil)
 var _ flag.Value = (*VerboseVar)(nil)
 
-type VerboseVar bool
+type VerboseVar uint8
 
 func (vv *VerboseVar) Level() slog.Level {
-	if vv != nil && *vv {
-		return slog.LevelInfo
+	if vv != nil {
+		if *vv > 1 {
+			return slog.LevelDebug
+		} else if *vv > 0 {
+			return slog.LevelInfo
+		}
 	}
 	return slog.LevelWarn
 }
 
 func (vv *VerboseVar) IsBoolFlag() bool { return true }
 func (vv *VerboseVar) String() string {
-	if vv != nil && *vv {
-		return "true"
+	if vv != nil {
+		return strconv.FormatUint(uint64(*vv), 10)
 	}
-	return "false"
+	return "0"
 }
 func (vv *VerboseVar) Set(s string) error {
-	b, err := strconv.ParseBool(s)
-	if err != nil {
-		return err
+	switch s {
+	case "true", "":
+		*vv = 1
+	case "false":
+		*vv = 0
+	default:
+		b, err := strconv.ParseUint(s, 10, 8)
+		if err != nil {
+			return err
+		}
+		*vv = VerboseVar(b)
 	}
-	*vv = VerboseVar(b)
 	return nil
 }
