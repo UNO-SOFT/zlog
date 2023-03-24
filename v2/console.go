@@ -52,12 +52,12 @@ func trimRootPath(p string) string {
 // ConsoleHandler prints to the console
 type ConsoleHandler struct {
 	HandlerOptions
-	UseColor bool
-
-	mu          sync.Mutex
 	textHandler slog.Handler
-	buf         bytes.Buffer
 	w           io.Writer
+	buf         bytes.Buffer
+
+	mu       sync.Mutex
+	UseColor bool
 }
 
 // HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
