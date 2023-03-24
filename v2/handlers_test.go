@@ -15,7 +15,7 @@ import (
 
 func TestMultiConsoleLevel(t *testing.T) {
 	var bufInfo, bufAll bytes.Buffer
-	verbose := zlog.VerboseVar(false)
+	verbose := zlog.VerboseVar(0)
 	zl := zlog.NewConsoleHandler(&verbose, &bufInfo)
 	zlMulti := zlog.NewMultiHandler(zl)
 	logger := zlog.NewLogger(zlMulti)
