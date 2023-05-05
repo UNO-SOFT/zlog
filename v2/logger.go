@@ -53,14 +53,35 @@ func NewContext(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, contextKey{}, logger)
 }
 
+// NewSContext returns a new context with the given logger embedded.
+func NewSContext(ctx context.Context, logger *slog.Logger) context.Context {
+	return context.WithValue(ctx, contextKey{}, logger)
+}
+
 // FromContext returns the Logger embedded into the Context, or the default logger otherwise.
 func FromContext(ctx context.Context) Logger {
-	if lgr, ok := ctx.Value(contextKey{}).(Logger); ok {
+	val := ctx.Value(contextKey{})
+	switch lgr := val.(type) {
+	case Logger:
 		return lgr
+	case *slog.Logger:
+		return NewLogger(lgr.Handler())
 	}
 	var lgr Logger
 	lgr.p.Store(slog.Default())
 	return lgr
+}
+
+// SFromContext returns the Logger embedded into the Context, or the default logger otherwise.
+func SFromContext(ctx context.Context) *slog.Logger {
+	val := ctx.Value(contextKey{})
+	switch lgr := val.(type) {
+	case *slog.Logger:
+		return lgr
+	case Logger:
+		return lgr.SLog()
+	}
+	return slog.Default()
 }
 
 // Log emulates go-kit/log.
