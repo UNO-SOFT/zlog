@@ -117,10 +117,10 @@ type customSourceHandler struct {
 func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 	o := opts.HandlerOptions
 	if !o.AddSource {
-		return o.NewJSONHandler(w)
+		return slog.NewJSONHandler(w, &o)
 	}
 	o.AddSource = false
-	return &customSourceHandler{Handler: o.NewJSONHandler(w)}
+	return &customSourceHandler{Handler: slog.NewJSONHandler(w, &o)}
 }
 
 func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {

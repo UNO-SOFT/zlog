@@ -41,9 +41,9 @@ func Discard() Logger {
 }
 
 func discard() *slog.Logger {
-	return slog.New(slog.HandlerOptions{
+	return slog.New(slog.NewJSONHandler(io.Discard, &slog.HandlerOptions{
 		Level: slog.LevelError,
-	}.NewJSONHandler(io.Discard))
+	}))
 }
 
 type contextKey struct{}

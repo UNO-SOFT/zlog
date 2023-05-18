@@ -51,7 +51,7 @@ func TestLogrLevel(t *testing.T) {
 
 func TestSLogLevel(t *testing.T) {
 	var buf bytes.Buffer
-	logger := slog.New(slog.HandlerOptions{Level: slog.LevelError}.NewJSONHandler(&buf))
+	logger := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelError}))
 	logger.Info("info")
 	logger.Error("error", io.EOF)
 	t.Log(buf.String())

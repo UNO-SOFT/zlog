@@ -19,7 +19,7 @@ func TestMultiConsoleLevel(t *testing.T) {
 	zl := zlog.NewConsoleHandler(&verbose, &bufInfo)
 	zlMulti := zlog.NewMultiHandler(zl)
 	logger := zlog.NewLogger(zlMulti)
-	zlMulti.Add(slog.NewJSONHandler(&bufAll))
+	zlMulti.Add(slog.NewJSONHandler(&bufAll, nil))
 	//t.Logf("SetLevel(%v)", zlog.ErrorLevel)
 	//logger.SetLevel(zlog.ErrorLevel)
 	t.Logf("logger: %#v slog: %#v",
@@ -47,10 +47,10 @@ func TestMultiConsoleLevel(t *testing.T) {
 
 func TestMultiHandlerLevel(t *testing.T) {
 	var bufInfo, bufAll bytes.Buffer
-	zl := zlog.NewLevelHandler(zlog.ErrorLevel, slog.NewJSONHandler(&bufInfo))
+	zl := zlog.NewLevelHandler(zlog.ErrorLevel, slog.NewJSONHandler(&bufInfo, nil))
 	zlMulti := zlog.NewMultiHandler(zl)
 	logger := zlog.NewLogger(zlMulti)
-	zlMulti.Add(slog.NewJSONHandler(&bufAll))
+	zlMulti.Add(slog.NewJSONHandler(&bufAll, nil))
 	//t.Logf("SetLevel(%v)", zlog.ErrorLevel)
 	//logger.SetLevel(zlog.ErrorLevel)
 	t.Logf("logger: %#v slog: %#v",
