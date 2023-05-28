@@ -5,13 +5,11 @@ import (
 	"testing"
 
 	"github.com/UNO-SOFT/zlog/v2"
-	"golang.org/x/exp/slog"
 )
 
 func TestConsole(t *testing.T) {
-	logHandler := zlog.NewT(t).SLog().Handler()
+	logger := zlog.NewT(t).SLog()
 
-	logger := slog.New(logHandler)
 	logger.Debug("Debug message", "hello", "world", "bad kv")
 	logger.Info("no attrs")
 	logger = logger.
@@ -20,5 +18,11 @@ func TestConsole(t *testing.T) {
 		With("with_key_2", "with_value_2")
 	logger.Info("Info message", "hello", "world")
 	logger.Warn("Warn message", "hello", "world")
-	logger.Error("Error message", errors.New("an error"), "hello", "world")
+	logger.Error("Error message", "error", errors.New("an error"), "hello", "world")
+}
+
+func TestConsoleWithEmptyAttrs(t *testing.T) {
+	logger := zlog.NewT(t).SLog() //.With("", "", "", "", "", "")
+	logger.Info("two empty attrs, but nothing else", "", "", "", "")
+	logger.Info("three empty attrs, plus one", "", "", "", "", "", "", "one", 1)
 }

@@ -52,9 +52,9 @@ func trimRootPath(p string) string {
 // ConsoleHandler prints to the console
 type ConsoleHandler struct {
 	HandlerOptions
-	textHandler slog.Handler
-	w           io.Writer
-	buf         bytes.Buffer
+	textHandler  slog.Handler
+	w            io.Writer
+	buf, attrBuf bytes.Buffer
 
 	mu       sync.Mutex
 	UseColor bool
@@ -89,7 +89,7 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 
 		w: w,
 	}
-	h.textHandler = opts.NewJSONHandler(&h.buf)
+	h.textHandler = opts.NewJSONHandler(&h.attrBuf)
 	return &h
 }
 
@@ -199,21 +199,40 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	h.buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
 
 	var err error
-	var addEOL bool
-	if h.textHandler == nil || r.NumAttrs() == 0 {
-		addEOL = true
-	} else {
+	h.attrBuf.Reset()
+	if !(h.textHandler == nil || r.NumAttrs() == 0) {
 		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
-		h.buf.WriteString(" attrs=")
 		err = h.textHandler.Handle(ctx, r)
+		if h.attrBuf.Len() != 0 {
+			b := h.attrBuf.Bytes()
+			if b[0] == '{' {
+				b = b[1:]
+				var changed bool
+				for bytes.HasPrefix(b, []byte(`"":""`)) {
+					b = b[6:]
+					changed = true
+				}
+				if changed {
+					h.attrBuf.Truncate(0)
+					if len(bytes.TrimSpace(b)) != 0 {
+						h.attrBuf.WriteByte('{')
+						h.attrBuf.Write(b)
+					}
+				}
+			}
+		}
 	}
 
+	if h.attrBuf.Len() != 0 {
+		h.buf.WriteString(" attrs=")
+		h.buf.Write(h.attrBuf.Bytes())
+	} else {
+		h.buf.WriteByte('\n')
+	}
 	if _, wErr := h.w.Write(h.buf.Bytes()); wErr != nil && err == nil {
 		err = wErr
 	}
-	if addEOL {
-		h.w.Write([]byte{'\n'})
-	}
+
 	return err
 }
 
