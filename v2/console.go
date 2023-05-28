@@ -244,7 +244,7 @@ func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 		w:              h.w,
 	}
 	h2.textHandler = newConsoleHandlerOptions().
-		NewJSONHandler(&h2.buf).
+		NewJSONHandler(&h2.attrBuf).
 		WithAttrs(attrs)
 	return &h2
 }
