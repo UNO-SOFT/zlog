@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"golang.org/x/exp/slog"
+	"github.com/UNO-SOFT/zlog/v2/slog"
 )
 
 var _ slog.Leveler = LogrLevel(0)

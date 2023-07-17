@@ -3,7 +3,7 @@ package zlog
 import (
 	"testing"
 
-	"golang.org/x/exp/slog"
+	"github.com/UNO-SOFT/zlog/v2/slog"
 )
 
 func TestCustomSource(t *testing.T) {

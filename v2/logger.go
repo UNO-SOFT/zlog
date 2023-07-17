@@ -16,8 +16,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/UNO-SOFT/zlog/v2/slog"
 	"github.com/go-logr/logr"
-	"golang.org/x/exp/slog"
 )
 
 // Logger is a helper type for logr.Logger -like slog.Logger.
@@ -158,7 +158,7 @@ func (lgr Logger) Error(err error, msg string, args ...any) {
 
 // ErrorCtx calls Error with ErrorLevel, always.
 func (lgr Logger) ErrorCtx(ctx context.Context, err error, msg string, args ...any) {
-	lgr.load().ErrorCtx(ctx, msg, append(args, slog.String("error", err.Error()))...)
+	lgr.load().ErrorContext(ctx, msg, append(args, slog.String("error", err.Error()))...)
 }
 
 // V offsets the logging levels by off (emulates logr.Logger.V).

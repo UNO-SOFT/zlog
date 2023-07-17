@@ -10,7 +10,8 @@ import (
 func TestConsole(t *testing.T) {
 	logger := zlog.NewT(t).SLog()
 
-	logger.Debug("Debug message", "hello", "world", "bad kv")
+	badKVargs := []any{"hello", "world", "bad kv"}
+	logger.Debug("Debug message", badKVargs...)
 	logger.Info("no attrs")
 	logger = logger.
 		With("with_key_1", "with_value_1").

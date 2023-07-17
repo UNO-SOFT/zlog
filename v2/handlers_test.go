@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/UNO-SOFT/zlog/v2"
-	"golang.org/x/exp/slog"
+	"github.com/UNO-SOFT/zlog/v2/slog"
 )
 
 func TestMultiConsoleLevel(t *testing.T) {

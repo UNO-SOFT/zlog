@@ -1,4 +1,4 @@
-//go:build 1.21
+//go:build go1.21
 
 // Copyright 2023 Tamás Gulácsi. All rights reserved.
 //
@@ -9,11 +9,11 @@ package zlog_test
 import (
 	"bytes"
 	"encoding/json"
-	"log/slog"
 	"testing"
 	"testing/slogtest"
 
 	"github.com/UNO-SOFT/zlog/v2"
+	"github.com/UNO-SOFT/zlog/v2/slog"
 )
 
 func TestSLogTest(t *testing.T) {
