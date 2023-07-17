@@ -126,8 +126,8 @@ func (lgr Logger) Debug(msg string, args ...any) {
 	lgr.log(context.Background(), slog.LevelDebug, msg, args...)
 }
 
-// DebugCtx calls DebugCtx if enabled.
-func (lgr Logger) DebugCtx(ctx context.Context, msg string, args ...any) {
+// DebugContext calls DebugContext if enabled.
+func (lgr Logger) DebugContext(ctx context.Context, msg string, args ...any) {
 	lgr.log(ctx, slog.LevelDebug, msg, args...)
 }
 
@@ -136,8 +136,8 @@ func (lgr Logger) Info(msg string, args ...any) {
 	lgr.log(context.Background(), slog.LevelInfo, msg, args...)
 }
 
-// InfoCtx calls InfoCtx if enabled.
-func (lgr Logger) InfoCtx(ctx context.Context, msg string, args ...any) {
+// InfoContext calls InfoContext if enabled.
+func (lgr Logger) InfoContext(ctx context.Context, msg string, args ...any) {
 	lgr.log(ctx, slog.LevelInfo, msg, args...)
 }
 
@@ -146,8 +146,8 @@ func (lgr Logger) Warn(msg string, args ...any) {
 	lgr.log(context.Background(), slog.LevelWarn, msg, args...)
 }
 
-// WarnCtx calls WarCtx if enabled.
-func (lgr Logger) WarnCtx(ctx context.Context, msg string, args ...any) {
+// WarnContext calls WarContext if enabled.
+func (lgr Logger) WarnContext(ctx context.Context, msg string, args ...any) {
 	lgr.log(ctx, slog.LevelWarn, msg, args...)
 }
 
@@ -156,8 +156,8 @@ func (lgr Logger) Error(err error, msg string, args ...any) {
 	lgr.load().Error(msg, append(args, slog.String("error", err.Error()))...)
 }
 
-// ErrorCtx calls Error with ErrorLevel, always.
-func (lgr Logger) ErrorCtx(ctx context.Context, err error, msg string, args ...any) {
+// ErrorContext calls Error with ErrorLevel, always.
+func (lgr Logger) ErrorContext(ctx context.Context, err error, msg string, args ...any) {
 	lgr.load().ErrorContext(ctx, msg, append(args, slog.String("error", err.Error()))...)
 }
 
