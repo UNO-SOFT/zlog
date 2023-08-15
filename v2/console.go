@@ -132,6 +132,16 @@ func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 	return &customSourceHandler{Handler: hndl}
 }
 
+func (h *customSourceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h2 := *h
+	h2.Handler = h2.Handler.WithAttrs(attrs)
+	return &h2
+}
+func (h *customSourceHandler) WithGroup(name string) slog.Handler {
+	h2 := *h
+	h2.Handler = h2.Handler.WithGroup(name)
+	return &h2
+}
 func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
 	if !h.Handler.Enabled(ctx, r.Level) {
 		return nil

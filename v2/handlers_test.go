@@ -84,11 +84,14 @@ func TestGroup(t *testing.T) {
 		logger.Info("naked", "a", 0)
 		{
 			logger := logger.WithGroup("group")
+			t.Logf("WithGroup: %#v", logger)
 			logger.Info("justGroup", "a", 1)
 		}
 		logger = logger.With("with", "value")
+		t.Logf("WithValue: %#v", logger)
 		logger.Info("withValue", "a", 2)
 		logger = logger.WithGroup("group")
+		t.Logf("WithValueGroup: %#v", logger)
 		logger.Info("withValueGroup", "a", 3)
 	}
 
@@ -146,7 +149,7 @@ func TestGroup(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Log(line)
-			if line.Source == "" {
+			if line.Source == "" && line.Group["source"] == "" {
 				t.Error("no source")
 			}
 		}
