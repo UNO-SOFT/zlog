@@ -100,11 +100,29 @@ func TestGroup(t *testing.T) {
 
 		do(logger)
 		t.Log(buf.String())
+
+		want := []string{
+			`"naked" attrs={"a":0}`,
+			`"justGroup" attrs={"group":{"a":1}}`,
+			`"withValue" attrs={"with":"value","a":2}`,
+			`"withValueGroup" attrs={"group":{"a":3}}`,
+		}
+		for i, line := range bytes.Split(buf.Bytes(), []byte{'\n'}) {
+			if len(line) == 0 {
+				continue
+			}
+			if _, after, found := bytes.Cut(line, []byte(" \x1b[34mINF\x1b[0m ")); !found {
+				t.Errorf("line %q does not contain INF", string(line))
+			} else if want[i] != string(after) {
+				t.Errorf("%d. wanted %q, got %q", i+1, want[i], string(line))
+			}
+		}
 	})
 
 	t.Run("json", func(t *testing.T) {
 		var buf bytes.Buffer
 		zl := zlog.DefaultHandlerOptions.NewJSONHandler(&buf)
+		t.Logf("zl: %#v", zl)
 		logger := zlog.NewLogger(zl).SLog()
 
 		do(logger)

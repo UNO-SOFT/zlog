@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -73,6 +74,12 @@ func newConsoleHandlerOptions() HandlerOptions {
 		case "time", "level", "source", "msg":
 			// These are handled directly
 			return emptyAttr
+		default:
+			if a.Value.Kind() == slog.KindAny {
+				if reflect.TypeOf(a.Value.Any()).Kind() == reflect.Func {
+					return emptyAttr
+				}
+			}
 		}
 		return a
 	}
@@ -116,11 +123,13 @@ type customSourceHandler struct {
 
 func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 	o := opts.HandlerOptions
-	if !o.AddSource {
-		return slog.NewJSONHandler(w, &o)
-	}
+	addSource := o.AddSource
 	o.AddSource = false
-	return &customSourceHandler{Handler: slog.NewJSONHandler(w, &o)}
+	hndl := slog.NewJSONHandler(w, &o)
+	if !addSource {
+		return hndl
+	}
+	return &customSourceHandler{Handler: hndl}
 }
 
 func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
@@ -238,27 +247,16 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 
 // WithAttrs implements slog.Handler.WithAttrs.
 func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	h2 := ConsoleHandler{
-		UseColor:       h.UseColor,
-		HandlerOptions: h.HandlerOptions,
-		w:              h.w,
-	}
-	h2.textHandler = newConsoleHandlerOptions().
-		NewJSONHandler(&h2.attrBuf).
+	h2 := *h
+	h2.textHandler = h2.HandlerOptions.NewJSONHandler(&h2.attrBuf).
 		WithAttrs(attrs)
 	return &h2
 }
 
 // WithGroup implements slog.Handler.WithGroup.
 func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
-	h2 := ConsoleHandler{
-		UseColor:       h.UseColor,
-		HandlerOptions: h.HandlerOptions,
-		w:              h.w,
-	}
-	h2.textHandler = newConsoleHandlerOptions().
-		NewJSONHandler(&h2.buf).
-		WithGroup(name)
+	h2 := *h
+	h2.textHandler = h2.HandlerOptions.NewJSONHandler(&h2.attrBuf).WithGroup(name)
 	return &h2
 }
 

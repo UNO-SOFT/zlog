@@ -36,6 +36,8 @@ const (
 	LevelInfo  = slog.LevelInfo
 	LevelWarn  = slog.LevelWarn
 	LevelError = slog.LevelError
+
+	KindAny = slog.KindAny
 )
 
 func Default() *slog.Logger           { return slog.Default() }
