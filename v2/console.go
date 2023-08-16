@@ -111,9 +111,7 @@ func newConsoleHandlerOptions() HandlerOptions {
 			return emptyAttr
 		default:
 			if a.Value.Kind() == slog.KindAny {
-				if ok, isEmpty := jsonMarshalable(a.Value); ok && isEmpty {
-					return emptyAttr
-				} else if !ok {
+				if ok, _ := jsonMarshalable(a.Value); !ok {
 					return slog.String(a.Key, fmt.Sprintf("%#v", a.Value))
 				}
 			}

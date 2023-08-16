@@ -15,6 +15,8 @@ import (
 
 	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/UNO-SOFT/zlog/v2/slog"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestMultiConsoleLevel(t *testing.T) {
@@ -110,10 +112,10 @@ func TestGroup(t *testing.T) {
 			Msg   string
 			Attrs map[string]any
 		}{
-			{Msg: "naked", Attrs: map[string]any{"a": 0}},
-			{Msg: "justGroup", Attrs: map[string]any{"group": map[string]any{"a": 1}}},
-			{Msg: "withValue", Attrs: map[string]any{"with": "value", "group": map[string]any{"a": 2}}},
-			{Msg: "withValueGroup", Attrs: map[string]any{"group": map[string]any{"a": 3}}},
+			{Msg: "naked", Attrs: map[string]any{"a": float64(0)}},
+			{Msg: "justGroup", Attrs: map[string]any{"group": map[string]any{"a": float64(1)}}},
+			{Msg: "withValue", Attrs: map[string]any{"with": "value", "a": float64(2)}},
+			{Msg: "withValueGroup", Attrs: map[string]any{"group": map[string]any{"a": float64(3)}}},
 		}
 		for i, line := range bytes.Split(buf.Bytes(), []byte{'\n'}) {
 			if len(line) == 0 {
@@ -131,6 +133,19 @@ func TestGroup(t *testing.T) {
 			} else if want[i].Msg != msg {
 				t.Errorf("%d. got %q, wanted %q", i+1, msg, want[i].Msg)
 			} else {
+				for k, v := range want[i].Attrs {
+					if w, ok := m[k]; !ok {
+						t.Errorf("%d. k=%q missing (have %#v)", i+1, k, m)
+					} else if d := cmp.Diff(w, v, cmp.FilterPath(
+						func(p cmp.Path) bool {
+							idx, ok := p[len(p)-1].(cmp.MapIndex)
+							return ok && (idx.Key().String() == "emptyFunc" ||
+								idx.Key().String() == "func")
+						}, cmp.Ignore(),
+					)); d != "" {
+						t.Errorf("%d. %s", i+1, d)
+					}
+				}
 				t.Logf("%d. %q %+v", i+1, msg, m)
 			}
 		}

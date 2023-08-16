@@ -5,6 +5,7 @@ go 1.21
 require (
 	github.com/go-logr/logr v1.2.4
 	github.com/go-logr/zerologr v1.2.3
+	github.com/google/go-cmp v0.5.8
 	github.com/rs/zerolog v1.29.0
 	github.com/tgulacsi/go v0.24.3
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
