@@ -38,7 +38,7 @@ var (
 	modPart = pathSep + "mod" + pathSep
 	srcPart = pathSep + "src" + pathSep
 
-	emptyAttr = slog.Attr{Key: "", Value: slog.StringValue("")}
+	zeroAttr slog.Attr
 )
 
 func trimRootPath(p string) string {
@@ -71,14 +71,18 @@ var (
 	jsonMarshalableEnc = json.NewEncoder(&jsonMarshalableBuf)
 )
 
-func jsonMarshalable(x slog.Value) (ok, isEmpty bool) {
+func ensurePrintableValueIsEmpty(x *slog.Value) (isEmpty bool) {
+	var ok bool
 	defer func() {
 		if r := recover(); r != nil {
 			ok = false
 		}
+		if !isEmpty && !ok {
+			*x = slog.StringValue(fmt.Sprintf("%v", *x))
+		}
 	}()
 	if x.Any() == nil {
-		return true, false
+		return true
 	}
 	rv := reflect.ValueOf(x.Any())
 	switch rv.Kind() {
@@ -94,12 +98,16 @@ func jsonMarshalable(x slog.Value) (ok, isEmpty bool) {
 	default:
 		jsonMarshalableMu.Lock()
 		defer jsonMarshalableMu.Unlock()
-		if ok = jsonMarshalableEnc.Encode(x.Any()) == nil; ok {
-			isEmpty = jsonMarshalableBuf.Len() <= 2
-		}
 		jsonMarshalableBuf.Reset()
+		if ok = jsonMarshalableEnc.Encode(x.Any()) == nil; ok {
+			if isEmpty := jsonMarshalableBuf.Len() <= 2; isEmpty {
+				return true
+			}
+			*x = slog.StringValue(jsonMarshalableBuf.String())
+			return false
+		}
 	}
-	return ok, rv.IsZero() || rv.Type().Kind() == reflect.Func
+	return rv.IsZero()
 }
 
 func newConsoleHandlerOptions() HandlerOptions {
@@ -108,11 +116,11 @@ func newConsoleHandlerOptions() HandlerOptions {
 		switch a.Key {
 		case "time", "level", "source", "msg":
 			// These are handled directly
-			return emptyAttr
+			return zeroAttr
 		default:
 			if a.Value.Kind() == slog.KindAny {
-				if ok, _ := jsonMarshalable(a.Value); !ok {
-					return slog.String(a.Key, fmt.Sprintf("%#v", a.Value))
+				if ensurePrintableValueIsEmpty(&a.Value) {
+					return zeroAttr
 				}
 			}
 		}
@@ -140,15 +148,12 @@ var DefaultHandlerOptions = HandlerOptions{HandlerOptions: slog.HandlerOptions{
 	AddSource: true,
 	ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 		switch a.Key {
-		case "time", "level", "source", "msg":
-			// These are handled directly
+		case "time", "level", "source":
 			return a
 		default:
 			if a.Value.Kind() == slog.KindAny {
-				if ok, isEmpty := jsonMarshalable(a.Value); ok && isEmpty {
-					return emptyAttr
-				} else if !ok {
-					return slog.String(a.Key, fmt.Sprintf("%#v", a.Value))
+				if ensurePrintableValueIsEmpty(&a.Value) {
+					return zeroAttr
 				}
 			}
 		}
