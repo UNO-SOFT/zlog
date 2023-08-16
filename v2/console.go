@@ -12,6 +12,7 @@ package zlog
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -64,20 +65,56 @@ type ConsoleHandler struct {
 // HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
 type HandlerOptions struct{ slog.HandlerOptions }
 
+var (
+	jsonMarshalableMu  sync.Mutex
+	jsonMarshalableBuf bytes.Buffer
+	jsonMarshalableEnc = json.NewEncoder(&jsonMarshalableBuf)
+)
+
+func jsonMarshalable(x slog.Value) (ok, isEmpty bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ok = false
+		}
+	}()
+	if x.Any() == nil {
+		return true, false
+	}
+	rv := reflect.ValueOf(x.Any())
+	switch rv.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Invalid:
+		ok = false
+	case reflect.Bool,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+		reflect.Float32, reflect.Float64,
+		reflect.Complex64, reflect.Complex128,
+		reflect.String:
+		ok = true
+	default:
+		jsonMarshalableMu.Lock()
+		defer jsonMarshalableMu.Unlock()
+		if ok = jsonMarshalableEnc.Encode(x.Any()) == nil; ok {
+			isEmpty = jsonMarshalableBuf.Len() <= 2
+		}
+		jsonMarshalableBuf.Reset()
+	}
+	return ok, rv.IsZero() || rv.Type().Kind() == reflect.Func
+}
+
 func newConsoleHandlerOptions() HandlerOptions {
 	opts := DefaultConsoleHandlerOptions
 	opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
-		if len(groups) != 0 {
-			return a
-		}
 		switch a.Key {
 		case "time", "level", "source", "msg":
 			// These are handled directly
 			return emptyAttr
 		default:
 			if a.Value.Kind() == slog.KindAny {
-				if reflect.TypeOf(a.Value.Any()).Kind() == reflect.Func {
+				if ok, isEmpty := jsonMarshalable(a.Value); ok && isEmpty {
 					return emptyAttr
+				} else if !ok {
+					return slog.String(a.Key, fmt.Sprintf("%#v", a.Value))
 				}
 			}
 		}
@@ -101,7 +138,25 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 }
 
 // DefaultHandlerOptions adds the source.
-var DefaultHandlerOptions = HandlerOptions{HandlerOptions: slog.HandlerOptions{AddSource: true}}
+var DefaultHandlerOptions = HandlerOptions{HandlerOptions: slog.HandlerOptions{
+	AddSource: true,
+	ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+		switch a.Key {
+		case "time", "level", "source", "msg":
+			// These are handled directly
+			return a
+		default:
+			if a.Value.Kind() == slog.KindAny {
+				if ok, isEmpty := jsonMarshalable(a.Value); ok && isEmpty {
+					return emptyAttr
+				} else if !ok {
+					return slog.String(a.Key, fmt.Sprintf("%#v", a.Value))
+				}
+			}
+		}
+		return a
+	}},
+}
 
 // DefaultConsoleHandlerOptions *does not* add the source.
 var DefaultConsoleHandlerOptions = HandlerOptions{}
@@ -219,7 +274,7 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	var err error
 	h.attrBuf.Reset()
-	if !(h.textHandler == nil || r.NumAttrs() == 0) {
+	if h.textHandler != nil && r.NumAttrs() != 0 {
 		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
 		err = h.textHandler.Handle(ctx, r)
 		if h.attrBuf.Len() != 0 {

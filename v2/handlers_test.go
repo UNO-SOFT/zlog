@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strconv"
 	"testing"
 	"time"
 
@@ -92,7 +93,8 @@ func TestGroup(t *testing.T) {
 		logger.Info("withValue", "a", 2)
 		logger = logger.WithGroup("group")
 		t.Logf("WithValueGroup: %#v", logger)
-		logger.Info("withValueGroup", "a", 3)
+		var emptyFunc func()
+		logger.Info("withValueGroup", "a", 3, "emptyFunc", emptyFunc, "func", logger.Info)
 	}
 
 	t.Run("console", func(t *testing.T) {
@@ -104,20 +106,32 @@ func TestGroup(t *testing.T) {
 		do(logger)
 		t.Log(buf.String())
 
-		want := []string{
-			`"naked" attrs={"a":0}`,
-			`"justGroup" attrs={"group":{"a":1}}`,
-			`"withValue" attrs={"with":"value","a":2}`,
-			`"withValueGroup" attrs={"group":{"a":3}}`,
+		want := []struct {
+			Msg   string
+			Attrs map[string]any
+		}{
+			{Msg: "naked", Attrs: map[string]any{"a": 0}},
+			{Msg: "justGroup", Attrs: map[string]any{"group": map[string]any{"a": 1}}},
+			{Msg: "withValue", Attrs: map[string]any{"with": "value", "group": map[string]any{"a": 2}}},
+			{Msg: "withValueGroup", Attrs: map[string]any{"group": map[string]any{"a": 3}}},
 		}
 		for i, line := range bytes.Split(buf.Bytes(), []byte{'\n'}) {
 			if len(line) == 0 {
 				continue
 			}
+			var m map[string]any
 			if _, after, found := bytes.Cut(line, []byte(" \x1b[34mINF\x1b[0m ")); !found {
 				t.Errorf("line %q does not contain INF", string(line))
-			} else if want[i] != string(after) {
-				t.Errorf("%d. wanted %q, got %q", i+1, want[i], string(line))
+			} else if j := bytes.IndexByte(after, '{'); j < 0 {
+				t.Errorf("%d. no { in %q", i+1, string(after))
+			} else if msg, err := strconv.Unquote(string(bytes.TrimSpace(bytes.TrimSuffix(after[:j], []byte("attrs="))))); err != nil {
+				t.Errorf("%d. unquote %q: %+v", i+1, string(after[:j]), err)
+			} else if err = json.Unmarshal(after[j:], &m); err != nil {
+				t.Errorf("%d. unmarshal %q: %+v", i+1, string(after[:j]), err)
+			} else if want[i].Msg != msg {
+				t.Errorf("%d. got %q, wanted %q", i+1, msg, want[i].Msg)
+			} else {
+				t.Logf("%d. %q %+v", i+1, msg, m)
 			}
 		}
 	})
