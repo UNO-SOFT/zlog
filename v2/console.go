@@ -71,43 +71,139 @@ var (
 	jsonMarshalableEnc = json.NewEncoder(&jsonMarshalableBuf)
 )
 
-func ensurePrintableValueIsEmpty(x *slog.Value) (isEmpty bool) {
+func ensurePrintableValueIsEmpty(value *slog.Value) (isEmpty bool) {
+	if value.Kind() != slog.KindAny {
+		return false
+	}
+
 	var ok bool
 	defer func() {
 		if r := recover(); r != nil {
 			ok = false
 		}
 		if !isEmpty && !ok {
-			*x = slog.StringValue(fmt.Sprintf("%v", *x))
+			*value = slog.StringValue(fmt.Sprintf("%v", *value))
 		}
 	}()
-	if x.Any() == nil {
+	v := value.Any()
+	if v == nil {
+		ok = true
 		return true
 	}
-	rv := reflect.ValueOf(x.Any())
-	switch rv.Kind() {
-	case reflect.Chan, reflect.Func, reflect.Invalid:
-		ok = false
-	case reflect.Bool,
-		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Float32, reflect.Float64,
-		reflect.Complex64, reflect.Complex128,
-		reflect.String:
+	switch x := v.(type) {
+	case string:
 		ok = true
-	default:
-		jsonMarshalableMu.Lock()
-		defer jsonMarshalableMu.Unlock()
-		jsonMarshalableBuf.Reset()
-		if ok = jsonMarshalableEnc.Encode(x.Any()) == nil; ok {
-			if isEmpty := jsonMarshalableBuf.Len() <= 2; isEmpty {
-				return true
-			}
-			*x = slog.StringValue(jsonMarshalableBuf.String())
-			return false
+		*value = slog.StringValue(x)
+		return x == ""
+	case error:
+		ok = true
+		if x == nil {
+			return true
 		}
+		*value = slog.StringValue(x.Error())
+		return false
+	case json.Marshaler:
+		ok = true
+		return x == nil
+	case fmt.Stringer:
+		ok = true
+		s := x.String()
+		*value = slog.StringValue(s)
+		return s == ""
+	case bool:
+		ok = true
+		*value = slog.BoolValue(x)
+		return false
+
+	case int:
+		ok = true
+		*value = slog.IntValue(x)
+	case int8:
+		ok = true
+		*value = slog.IntValue(int(x))
+		return false
+	case int16:
+		ok = true
+		*value = slog.IntValue(int(x))
+		return false
+	case int32:
+		ok = true
+		*value = slog.IntValue(int(x))
+		return false
+	case int64:
+		ok = true
+		*value = slog.Int64Value(x)
+		return false
+
+	case uint:
+		ok = true
+		*value = slog.Int64Value(int64(x))
+	case uint8:
+		ok = true
+		*value = slog.IntValue(int(x))
+		return false
+	case uint16:
+		ok = true
+		*value = slog.IntValue(int(x))
+		return false
+	case uint32:
+		ok = true
+		*value = slog.Int64Value(int64(x))
+		return false
+	case uint64:
+		ok = true
+		if x > 1<<63 {
+			*value = slog.StringValue(strconv.FormatUint(x, 10))
+		} else {
+			*value = slog.Uint64Value(x)
+		}
+		return false
+
+	case float32:
+		ok = true
+		*value = slog.Float64Value(float64(x))
+		return false
+	case float64:
+		ok = true
+		*value = slog.Float64Value(x)
+		return false
+
+	case complex64:
+		ok = true
+		*value = slog.StringValue(strconv.FormatComplex(complex128(x), 'f', -1, 64))
+		return false
+	case complex128:
+		ok = true
+		*value = slog.StringValue(strconv.FormatComplex(x, 'f', -1, 128))
+		return false
+
+	default:
+
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Invalid:
+			ok = false
+			return true
+		case reflect.Chan, reflect.Func:
+			ok = false
+			return rv.IsNil()
+		default:
+			jsonMarshalableMu.Lock()
+			defer jsonMarshalableMu.Unlock()
+			jsonMarshalableBuf.Reset()
+			if ok = jsonMarshalableEnc.Encode(v) == nil; ok {
+				switch x := jsonMarshalableBuf.String(); x {
+				case `""`, `[]`, `{}`, "null":
+					return true
+				default:
+					*value = slog.StringValue(x)
+					return false
+				}
+			}
+		}
+		return rv.IsZero()
 	}
-	return rv.IsZero()
+	return false
 }
 
 func newConsoleHandlerOptions() HandlerOptions {
