@@ -58,7 +58,7 @@ type ConsoleHandler struct {
 	w            io.Writer
 	buf, attrBuf bytes.Buffer
 
-	mu       sync.Mutex
+	mu       *sync.Mutex
 	UseColor bool
 }
 
@@ -233,7 +233,8 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 		UseColor:       true,
 		HandlerOptions: opts,
 
-		w: w,
+		w:  w,
+		mu: new(sync.Mutex),
 	}
 	h.textHandler = opts.NewJSONHandler(&h.attrBuf)
 	return &h

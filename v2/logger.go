@@ -21,7 +21,9 @@ import (
 )
 
 // Logger is a helper type for logr.Logger -like slog.Logger.
-type Logger struct{ p atomic.Pointer[slog.Logger] }
+type Logger struct{ p *atomic.Pointer[slog.Logger] }
+
+func newLogger() Logger { return Logger{p: &atomic.Pointer[slog.Logger]{}} }
 
 func (lgr Logger) load() *slog.Logger {
 	if l := lgr.p.Load(); l != nil {
@@ -35,7 +37,7 @@ func (lgr Logger) load() *slog.Logger {
 
 // Discard returns a Logger that does not log at all.
 func Discard() Logger {
-	var lgr Logger
+	lgr := newLogger()
 	lgr.p.Store(discard())
 	return lgr
 }
@@ -67,7 +69,7 @@ func FromContext(ctx context.Context) Logger {
 	case *slog.Logger:
 		return NewLogger(lgr.Handler())
 	}
-	var lgr Logger
+	lgr := newLogger()
 	lgr.p.Store(slog.Default())
 	return lgr
 }
@@ -171,14 +173,14 @@ func (lgr Logger) V(off int) Logger {
 	if lh, ok := h.(*LevelHandler); ok {
 		level = lh.level.Level()
 	}
-	var lgr2 Logger
+	lgr2 := newLogger()
 	lgr2.p.Store(slog.New(&LevelHandler{level: level - slog.Level(off), handler: h}))
 	return lgr2
 }
 
 // WithValues emulates logr.Logger.WithValues with slog.WithAttrs.
 func (lgr Logger) WithValues(args ...any) Logger {
-	var lgr2 Logger
+	lgr2 := newLogger()
 	lgr2.p.Store(lgr.load().With(args...))
 	return lgr2
 }
@@ -197,7 +199,7 @@ func (lgr Logger) WithName(s string) Logger { return lgr.WithGroup(s) }
 
 // WithGroup is slog.WithGroup
 func (lgr Logger) WithGroup(s string) Logger {
-	var lgr2 Logger
+	lgr2 := newLogger()
 	lgr2.p.Store(lgr.load().WithGroup(s))
 	return lgr2
 }
@@ -265,7 +267,7 @@ func SetHandler(lgr Logger, h slog.Handler) { lgr.SetHandler(h) }
 
 // NewLogger returns a new Logger writing to w.
 func NewLogger(h slog.Handler) Logger {
-	var lgr Logger
+	lgr := Logger{p: &atomic.Pointer[slog.Logger]{}}
 	lgr.p.Store(slog.New(h))
 	return lgr
 }
