@@ -51,15 +51,15 @@ func trimRootPath(p string) string {
 	return p
 }
 
+var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+
 // ConsoleHandler prints to the console
 type ConsoleHandler struct {
 	HandlerOptions
-	textHandler  slog.Handler
-	w            io.Writer
-	buf, attrBuf bytes.Buffer
-
-	mu       *sync.Mutex
-	UseColor bool
+	w         io.Writer
+	withGroup string
+	withAttrs []slog.Attr
+	UseColor  bool
 }
 
 // HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
@@ -232,11 +232,8 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 	h := ConsoleHandler{
 		UseColor:       true,
 		HandlerOptions: opts,
-
-		w:  w,
-		mu: new(sync.Mutex),
+		w:              w,
 	}
-	h.textHandler = opts.NewJSONHandler(&h.attrBuf)
 	return &h
 }
 
@@ -322,7 +319,7 @@ func IsTerminal(w io.Writer) bool {
 
 // Enabled implements slog.Handler.Enabled.
 func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.HandlerOptions.Level.Level() <= level && h.textHandler.Enabled(ctx, level)
+	return h.HandlerOptions.Level.Level() <= level
 }
 
 // Handle implements slog.Handler.Handle.
@@ -330,17 +327,17 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	if h == nil {
 		return nil
 	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.buf.Reset()
+	buf := bufPool.Get().(*bytes.Buffer)
+	defer bufPool.Put(buf)
+	buf.Reset()
 	tmp := make([]byte, 0, len(TimeFormat)+len(r.Message))
-	h.buf.Write(r.Time.AppendFormat(tmp[:0], TimeFormat))
+	buf.Write(r.Time.AppendFormat(tmp[:0], TimeFormat))
 	if TimeFormat == DefaultTimeFormat {
-		for n := len(DefaultTimeFormat) - h.buf.Len(); n > 0; n-- {
-			h.buf.WriteByte('0')
+		for n := len(DefaultTimeFormat) - buf.Len(); n > 0; n-- {
+			buf.WriteByte('0')
 		}
 	}
-	h.buf.WriteString(" ")
+	buf.WriteString(" ")
 
 	var level string
 	if r.Level < slog.LevelInfo {
@@ -355,30 +352,40 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	if h.UseColor {
 		level = addColorToLevel(level)
 	}
-	h.buf.WriteString(level)
-	h.buf.WriteString(" ")
+	buf.WriteString(level)
+	buf.WriteString(" ")
 
 	if h.AddSource && r.PC != 0 {
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
 		file, line := frame.File, frame.Line
 		if file != "" {
-			h.buf.WriteByte('[')
-			h.buf.WriteString(trimRootPath(file))
-			h.buf.WriteString(":")
-			h.buf.Write([]byte(strconv.Itoa(line)))
-			h.buf.WriteString("] ")
+			buf.WriteByte('[')
+			buf.WriteString(trimRootPath(file))
+			buf.WriteString(":")
+			buf.Write([]byte(strconv.Itoa(line)))
+			buf.WriteString("] ")
 		}
 	}
 
-	h.buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
+	buf.Write(strconv.AppendQuote(tmp[:0], r.Message))
 
 	var err error
-	h.attrBuf.Reset()
-	if h.textHandler != nil && r.NumAttrs() != 0 {
+	if r.NumAttrs() != 0 {
+		attrBuf := bufPool.Get().(*bytes.Buffer)
+		defer bufPool.Put(attrBuf)
+		attrBuf.Reset()
+		textHandler := h.HandlerOptions.NewJSONHandler(attrBuf)
+		if len(h.withAttrs) != 0 {
+			textHandler = textHandler.WithAttrs(h.withAttrs)
+		}
+		if h.withGroup != "" {
+			textHandler = textHandler.WithGroup(h.withGroup)
+		}
+
 		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
-		err = h.textHandler.Handle(ctx, r)
-		if h.attrBuf.Len() != 0 {
-			b := h.attrBuf.Bytes()
+		err = textHandler.Handle(ctx, r)
+		if attrBuf.Len() != 0 {
+			b := attrBuf.Bytes()
 			if b[0] == '{' {
 				b = b[1:]
 				var changed bool
@@ -387,23 +394,23 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 					changed = true
 				}
 				if changed {
-					h.attrBuf.Truncate(0)
+					attrBuf.Truncate(0)
 					if len(bytes.TrimSpace(b)) != 0 {
-						h.attrBuf.WriteByte('{')
-						h.attrBuf.Write(b)
+						attrBuf.WriteByte('{')
+						attrBuf.Write(b)
 					}
 				}
 			}
 		}
+		if attrBuf.Len() != 0 {
+			buf.WriteString(" attrs=")
+			buf.Write(attrBuf.Bytes())
+		}
 	}
-
-	if h.attrBuf.Len() != 0 {
-		h.buf.WriteString(" attrs=")
-		h.buf.Write(h.attrBuf.Bytes())
-	} else {
-		h.buf.WriteByte('\n')
+	if buf.Len() != 0 && buf.Bytes()[buf.Len()-1] != '\n' {
+		buf.WriteByte('\n')
 	}
-	if _, wErr := h.w.Write(h.buf.Bytes()); wErr != nil && err == nil {
+	if _, wErr := h.w.Write(buf.Bytes()); wErr != nil && err == nil {
 		err = wErr
 	}
 
@@ -413,15 +420,14 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 // WithAttrs implements slog.Handler.WithAttrs.
 func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h2 := *h
-	h2.textHandler = h2.HandlerOptions.NewJSONHandler(&h2.attrBuf).
-		WithAttrs(attrs)
+	h2.withAttrs = append(h2.withAttrs, attrs...)
 	return &h2
 }
 
 // WithGroup implements slog.Handler.WithGroup.
 func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
 	h2 := *h
-	h2.textHandler = h2.HandlerOptions.NewJSONHandler(&h2.attrBuf).WithGroup(name)
+	h2.withGroup = name
 	return &h2
 }
 

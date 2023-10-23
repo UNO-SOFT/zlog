@@ -130,6 +130,8 @@ func TestGroup(t *testing.T) {
 				t.Errorf("%d. unquote %q: %+v", i+1, string(after[:j]), err)
 			} else if err = json.Unmarshal(after[j:], &m); err != nil {
 				t.Errorf("%d. unmarshal %q: %+v", i+1, string(after[:j]), err)
+			} else if len(want) <= i {
+				t.Errorf("%d. want=%d", i+1, len(want))
 			} else if want[i].Msg != msg {
 				t.Errorf("%d. got %q, wanted %q", i+1, msg, want[i].Msg)
 			} else {
