@@ -9,14 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"regexp"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/UNO-SOFT/zlog/v2"
 	"github.com/UNO-SOFT/zlog/v2/slog"
-
-	"github.com/google/go-cmp/cmp"
 )
 
 func TestMultiConsoleLevel(t *testing.T) {
@@ -108,47 +107,33 @@ func TestGroup(t *testing.T) {
 		do(logger)
 		t.Log(buf.String())
 
+		const fakeAddr = "0xc000016c40"
+		rAddr := regexp.MustCompile("0x[0-9a-f]*")
+
 		want := []struct {
-			Msg   string
-			Attrs map[string]any
+			Msg, Want string
 		}{
-			{Msg: "naked", Attrs: map[string]any{"a": float64(0)}},
-			{Msg: "justGroup", Attrs: map[string]any{"group": map[string]any{"a": float64(1)}}},
-			{Msg: "withValue", Attrs: map[string]any{"with": "value", "a": float64(2)}},
-			{Msg: "withValueGroup", Attrs: map[string]any{"group": map[string]any{"a": float64(3)}}},
+			{Msg: "naked", Want: "a=0"},
+			{Msg: "justGroup", Want: "group.a=1"},
+			{Msg: "withValue", Want: "with=value a=2"},
+			{Msg: "withValueGroup", Want: "with=value group.a=3 group.func=" + fakeAddr},
 		}
 		for i, line := range bytes.Split(buf.Bytes(), []byte{'\n'}) {
 			if len(line) == 0 {
 				continue
 			}
-			var m map[string]any
 			if _, after, found := bytes.Cut(line, []byte(" \x1b[34mINF\x1b[0m ")); !found {
 				t.Errorf("line %q does not contain INF", string(line))
-			} else if j := bytes.IndexByte(after, '{'); j < 0 {
-				t.Errorf("%d. no { in %q", i+1, string(after))
-			} else if msg, err := strconv.Unquote(string(bytes.TrimSpace(bytes.TrimSuffix(after[:j], []byte("attrs="))))); err != nil {
-				t.Errorf("%d. unquote %q: %+v", i+1, string(after[:j]), err)
-			} else if err = json.Unmarshal(after[j:], &m); err != nil {
-				t.Errorf("%d. unmarshal %q: %+v", i+1, string(after[:j]), err)
-			} else if len(want) <= i {
-				t.Errorf("%d. want=%d", i+1, len(want))
+			} else if j := bytes.IndexByte(after, '"'); j < 0 {
+				t.Errorf("%d. no \" in %q", i+1, string(after))
+			} else if k := bytes.IndexByte(after[j+1:], '"'); j < 0 {
+				t.Errorf("%d. no \" in %q", i+1, string(after[j+1:]))
+			} else if msg, err := strconv.Unquote(string(bytes.TrimSpace(after[:j+k+2]))); err != nil {
+				t.Errorf("%d. unquote %q: %+v", i+1, string(after[:j+k+2]), err)
 			} else if want[i].Msg != msg {
 				t.Errorf("%d. got %q, wanted %q", i+1, msg, want[i].Msg)
-			} else {
-				for k, v := range want[i].Attrs {
-					if w, ok := m[k]; !ok {
-						t.Errorf("%d. k=%q missing (have %#v)", i+1, k, m)
-					} else if d := cmp.Diff(w, v, cmp.FilterPath(
-						func(p cmp.Path) bool {
-							idx, ok := p[len(p)-1].(cmp.MapIndex)
-							return ok && (idx.Key().String() == "emptyFunc" ||
-								idx.Key().String() == "func")
-						}, cmp.Ignore(),
-					)); d != "" {
-						t.Errorf("%d. %s", i+1, d)
-					}
-				}
-				t.Logf("%d. %q %+v", i+1, msg, m)
+			} else if got := string(rAddr.ReplaceAll(after[j+k+3:], []byte(fakeAddr))); got != want[i].Want {
+				t.Errorf("%d. got %q, wanted %q", i+1, got, want[i].Want)
 			}
 		}
 	})

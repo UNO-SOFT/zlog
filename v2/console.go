@@ -56,10 +56,14 @@ var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 // ConsoleHandler prints to the console
 type ConsoleHandler struct {
 	HandlerOptions
-	w         io.Writer
-	withGroup string
-	withAttrs []slog.Attr
-	UseColor  bool
+	w           io.Writer
+	withGroup   []string
+	withAttrs   []slog.Attr
+	UseColor    bool
+	attrHandler *slog.TextHandler
+
+	mu      *sync.Mutex
+	attrBuf bytes.Buffer
 }
 
 // HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
@@ -233,7 +237,9 @@ func NewConsoleHandler(level slog.Leveler, w io.Writer) *ConsoleHandler {
 		UseColor:       true,
 		HandlerOptions: opts,
 		w:              w,
+		mu:             new(sync.Mutex),
 	}
+	h.initAttrHandler()
 	return &h
 }
 
@@ -319,7 +325,7 @@ func IsTerminal(w io.Writer) bool {
 
 // Enabled implements slog.Handler.Enabled.
 func (h *ConsoleHandler) Enabled(ctx context.Context, level slog.Level) bool {
-	return h.HandlerOptions.Level.Level() <= level
+	return level >= h.HandlerOptions.Level.Level()
 }
 
 // Handle implements slog.Handler.Handle.
@@ -371,41 +377,18 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 
 	var err error
 	if r.NumAttrs() != 0 {
-		attrBuf := bufPool.Get().(*bytes.Buffer)
-		defer bufPool.Put(attrBuf)
-		attrBuf.Reset()
-		textHandler := h.HandlerOptions.NewJSONHandler(attrBuf)
-		if len(h.withAttrs) != 0 {
-			textHandler = textHandler.WithAttrs(h.withAttrs)
-		}
-		if h.withGroup != "" {
-			textHandler = textHandler.WithGroup(h.withGroup)
-		}
+		func() {
+			h.mu.Lock()
+			defer h.mu.Unlock()
+			h.attrBuf.Reset()
 
-		r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
-		err = textHandler.Handle(ctx, r)
-		if attrBuf.Len() != 0 {
-			b := attrBuf.Bytes()
-			if b[0] == '{' {
-				b = b[1:]
-				var changed bool
-				for bytes.HasPrefix(b, []byte(`"":""`)) {
-					b = b[6:]
-					changed = true
-				}
-				if changed {
-					attrBuf.Truncate(0)
-					if len(bytes.TrimSpace(b)) != 0 {
-						attrBuf.WriteByte('{')
-						attrBuf.Write(b)
-					}
-				}
+			r.Time, r.Level, r.PC, r.Message = time.Time{}, 0, 0, ""
+			err = h.attrHandler.Handle(ctx, r)
+			if h.attrBuf.Len() != 0 {
+				buf.WriteByte(' ')
+				buf.Write(h.attrBuf.Bytes())
 			}
-		}
-		if attrBuf.Len() != 0 {
-			buf.WriteString(" attrs=")
-			buf.Write(attrBuf.Bytes())
-		}
+		}()
 	}
 	if buf.Len() != 0 && buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
@@ -417,17 +400,31 @@ func (h *ConsoleHandler) Handle(ctx context.Context, r slog.Record) error {
 	return err
 }
 
+func (h *ConsoleHandler) initAttrHandler() {
+	h.attrHandler = slog.NewTextHandler(&h.attrBuf, &h.HandlerOptions.HandlerOptions)
+	if len(h.withAttrs) != 0 {
+		h.attrHandler = h.attrHandler.WithAttrs(h.withAttrs).(*slog.TextHandler)
+	}
+	if len(h.withGroup) != 0 {
+		for _, g := range h.withGroup {
+			h.attrHandler = h.attrHandler.WithGroup(g).(*slog.TextHandler)
+		}
+	}
+}
+
 // WithAttrs implements slog.Handler.WithAttrs.
 func (h *ConsoleHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h2 := *h
-	h2.withAttrs = append(h2.withAttrs, attrs...)
+	h2.withAttrs = append(append(make([]slog.Attr, 0, len(h2.withAttrs)+len(attrs)), h2.withAttrs...), attrs...)
+	h2.initAttrHandler()
 	return &h2
 }
 
 // WithGroup implements slog.Handler.WithGroup.
 func (h *ConsoleHandler) WithGroup(name string) slog.Handler {
 	h2 := *h
-	h2.withGroup = name
+	h2.withGroup = append(append(make([]string, 0, len(h2.withGroup)+1), h2.withGroup...), name)
+	h2.initAttrHandler()
 	return &h2
 }
 
