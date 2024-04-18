@@ -1,4 +1,4 @@
-// Copyright 2022, 2023 Tamás Gulácsi. All rights reserved.
+// Copyright 2022, 2024 Tamás Gulácsi. All rights reserved.
 //
 // SPDX-License-Identifier: Apache-2.0
 
@@ -276,7 +276,6 @@ func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
 
 type customSourceHandler struct {
 	slog.Handler
-	buf bytes.Buffer
 }
 
 func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
@@ -308,7 +307,9 @@ func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
 	if r.PC != 0 {
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
 		if file, line := frame.File, frame.Line; file != "" {
-			h.buf.Reset()
+			buf := bufPool.Get().(*bytes.Buffer)
+			defer bufPool.Put(buf)
+			buf.Reset()
 			r.AddAttrs(slog.String("source", trimRootPath(file)+":"+strconv.Itoa(line)))
 		}
 	}
