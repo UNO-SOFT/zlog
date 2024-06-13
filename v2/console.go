@@ -274,10 +274,6 @@ func MaybeConsoleHandler(level slog.Leveler, w io.Writer) slog.Handler {
 	return opts.NewJSONHandler(w)
 }
 
-type customSourceHandler struct {
-	slog.Handler
-}
-
 func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 	o := opts.HandlerOptions
 	addSource := o.AddSource
@@ -286,20 +282,41 @@ func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 	if !addSource {
 		return hndl
 	}
-	return &customSourceHandler{Handler: hndl}
+	return customSourceHandler{Handler: &syncHandler{Handler: hndl}}
 }
 
-func (h *customSourceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	h2 := *h
-	h2.Handler = h2.Handler.WithAttrs(attrs)
-	return &h2
+type syncHandler struct {
+	mu sync.Mutex
+	slog.Handler
 }
-func (h *customSourceHandler) WithGroup(name string) slog.Handler {
-	h2 := *h
-	h2.Handler = h2.Handler.WithGroup(name)
-	return &h2
+
+func (h *syncHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return &syncHandler{Handler: h.Handler.WithAttrs(attrs)}
 }
-func (h *customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
+func (h *syncHandler) WithGroup(name string) slog.Handler {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return &syncHandler{Handler: h.Handler.WithGroup(name)}
+}
+func (h *syncHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.Handler.Handle(ctx, r)
+}
+
+type customSourceHandler struct {
+	slog.Handler
+}
+
+func (h customSourceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return customSourceHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+func (h customSourceHandler) WithGroup(name string) slog.Handler {
+	return customSourceHandler{Handler: h.Handler.WithGroup(name)}
+}
+func (h customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
 	if !h.Handler.Enabled(ctx, r.Level) {
 		return nil
 	}
