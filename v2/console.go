@@ -322,6 +322,7 @@ func (h customSourceHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 	//fmt.Printf("customSourceHandler.Handle r=%+v PC=%d\n", r, r.PC)
 	if r.PC != 0 {
+		// https://pkg.go.dev/log/slog#example-package-Wrapping
 		frame, _ := runtime.CallersFrames([]uintptr{r.PC}).Next()
 		if file, line := frame.File, frame.Line; file != "" {
 			buf := bufPool.Get().(*bytes.Buffer)

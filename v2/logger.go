@@ -113,6 +113,7 @@ func (lgr Logger) log(ctx context.Context, level slog.Level, msg string, args ..
 		return
 	}
 	var pcs [1]uintptr
+	// https://pkg.go.dev/log/slog#example-package-Wrapping
 	// skip [runtime.Callers, this function, this function's caller]
 	runtime.Callers(3, pcs[:])
 	r := slog.NewRecord(time.Now(), level, msg, pcs[0])
