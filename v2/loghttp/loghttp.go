@@ -1,7 +1,8 @@
+// Copyright 2024 Tamas Gulacsi. All rights reserved.
 // Copyright 2023 Jamie Tama. All rights reserved.
 //
-// Package httplogtransport is from https://www.jvt.me/posts/2023/03/11/go-debug-http/
-package httplogtransport
+// Package loghttp is from https://www.jvt.me/posts/2023/03/11/go-debug-http/
+package loghttp
 
 import (
 	"log/slog"
@@ -10,6 +11,22 @@ import (
 
 	"github.com/UNO-SOFT/zlog/v2"
 )
+
+type option func(*LoggingTransport)
+
+// WithLevel allows seting then log level.
+func WithLevel(lvl slog.Leveler) option {
+	return func(tr *LoggingTransport) { tr.LogLevel = lvl }
+}
+
+// Transport returns a transport that logs requests and responses.
+func Transport(tr http.RoundTripper, opts ...option) LoggingTransport {
+	ltr := LoggingTransport{Transport: tr}
+	for _, o := range opts {
+		o(&ltr)
+	}
+	return ltr
+}
 
 type LoggingTransport struct {
 	LogLevel  slog.Leveler
