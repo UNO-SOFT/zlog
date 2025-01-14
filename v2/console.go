@@ -57,13 +57,13 @@ var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
 type ConsoleHandler struct {
 	HandlerOptions
 	w           io.Writer
-	withGroup   []string
-	withAttrs   []slog.Attr
-	UseColor    bool
 	attrHandler *slog.TextHandler
 
-	mu      *sync.Mutex
-	attrBuf bytes.Buffer
+	mu        *sync.Mutex
+	withGroup []string
+	withAttrs []slog.Attr
+	attrBuf   bytes.Buffer
+	UseColor  bool
 }
 
 // HandlerOptions wraps slog.HandlerOptions, stripping source prefix.
@@ -286,8 +286,8 @@ func (opts HandlerOptions) NewJSONHandler(w io.Writer) slog.Handler {
 }
 
 type syncHandler struct {
-	mu sync.Mutex
 	slog.Handler
+	mu sync.Mutex
 }
 
 func (h *syncHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

@@ -242,7 +242,7 @@ func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
 // Error logs an error, with the given message and key/value pairs as
 // context.  See Logger.Error for more details.
 func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
-	ls.Logger.Error(msg, err, keysAndValues)
+	ls.Logger.Error(msg, append(keysAndValues, slog.Any("error", err))...)
 }
 
 // WithValues returns a new LogSink with additional key/value pairs.  See

@@ -36,11 +36,14 @@ func TestSLogTest(t *testing.T) {
 		}
 		return ms
 	}
-	if err := slogtest.TestHandler(h, results); err != nil {
-		if strings.Contains(err.Error(), "a Handler should not output groups for an empty Record") {
-			t.Log(err)
-		} else {
-			t.Fatal(err)
+	for _, h := range []slog.Handler{h, zlog.NewBatchingHandler(h, 0, 0)} {
+		buf.Reset()
+		if err := slogtest.TestHandler(h, results); err != nil {
+			if strings.Contains(err.Error(), "a Handler should not output groups ") {
+				t.Log(err)
+			} else {
+				t.Error(err)
+			}
 		}
 	}
 }
