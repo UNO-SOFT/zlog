@@ -74,9 +74,11 @@ func (sw *SyncWriter) Write(p []byte) (int, error) {
 
 // NewBatchingHandler returns a BatchingHandler that sends the record to the given Handler
 // periodically (iff interval > 0) or when the backlog is full.
-func NewBatchingHandler(hndl slog.Handler, interval time.Duration, size int) slog.Handler {
+func NewBatchingHandler(hndl slog.Handler, interval time.Duration, size int) *batchingHandler {
 	return &batchingHandler{h: hndl, interval: interval, size: size}
 }
+
+var _ slog.Handler = (*batchingHandler)(nil)
 
 type batchingHandler struct {
 	h        slog.Handler
