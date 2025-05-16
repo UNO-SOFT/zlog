@@ -5,9 +5,12 @@
 package loghttp
 
 import (
+	"crypto/sha256"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
+	"sync"
+	"sync/atomic"
 
 	"github.com/UNO-SOFT/zlog/v2"
 )
@@ -21,7 +24,7 @@ func WithLevel(lvl slog.Leveler) option {
 
 // Transport returns a transport that logs requests and responses.
 func Transport(tr http.RoundTripper, opts ...option) LoggingTransport {
-	ltr := LoggingTransport{Transport: tr}
+	ltr := LoggingTransport{Transport: tr, seen: new(sync.Map), size: new(atomic.Uint32)}
 	for _, o := range opts {
 		o(&ltr)
 	}
@@ -31,6 +34,8 @@ func Transport(tr http.RoundTripper, opts ...option) LoggingTransport {
 type LoggingTransport struct {
 	LogLevel  slog.Leveler
 	Transport http.RoundTripper
+	seen      *sync.Map
+	size      *atomic.Uint32
 }
 
 func (s LoggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
@@ -60,14 +65,28 @@ func (s LoggingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	}
 
 	var respBytes []byte
-	if enabled && resp != nil {
-		var err error
-		if respBytes, err = httputil.DumpResponse(resp, true); err != nil {
-			logger.Error("DumpResponse", "error", err)
+	if resp != nil {
+		var dumpErr error
+		if respBytes, dumpErr = httputil.DumpResponse(resp, true); dumpErr != nil {
+			logger.Error("DumpResponse", "error", dumpErr)
+		}
+	}
+	var skip bool
+	if s.seen != nil {
+		h := sha256.New()
+		h.Write(reqBytes)
+		h.Write(respBytes)
+		if _, skip = s.seen.LoadOrStore(h.Sum(nil), nil); !skip {
+			if s.size.Add(1) > 1000 {
+				s.seen.Clear()
+				s.seen.Store(h.Sum(nil), nil)
+			}
 		}
 	}
 
-	logger.Log(ctx, level, "RoundTrip", "request", string(reqBytes), "respnse", string(respBytes))
+	if !skip {
+		logger.Log(ctx, level, "RoundTrip", "request", string(reqBytes), "response", string(respBytes))
+	}
 
 	return resp, err
 }
