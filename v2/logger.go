@@ -87,7 +87,7 @@ func SFromContext(ctx context.Context) *slog.Logger {
 }
 
 // Log emulates go-kit/log.
-func (lgr Logger) Log(keyvals ...interface{}) error {
+func (lgr Logger) Log(keyvals ...any) error {
 	if !lgr.load().Enabled(context.Background(), slog.LevelInfo) {
 		return nil
 	}
@@ -235,19 +235,19 @@ func (ls SLogSink) Enabled(level int) bool {
 // The level argument is provided for optional logging.  This method will
 // only be called when Enabled(level) is true. See Logger.Info for more
 // details.
-func (ls SLogSink) Info(level int, msg string, keysAndValues ...interface{}) {
+func (ls SLogSink) Info(level int, msg string, keysAndValues ...any) {
 	ls.Logger.Info(msg, keysAndValues...)
 }
 
 // Error logs an error, with the given message and key/value pairs as
 // context.  See Logger.Error for more details.
-func (ls SLogSink) Error(err error, msg string, keysAndValues ...interface{}) {
+func (ls SLogSink) Error(err error, msg string, keysAndValues ...any) {
 	ls.Logger.Error(msg, append(keysAndValues, slog.Any("error", err))...)
 }
 
 // WithValues returns a new LogSink with additional key/value pairs.  See
 // Logger.WithValues for more details.
-func (ls SLogSink) WithValues(keysAndValues ...interface{}) logr.LogSink {
+func (ls SLogSink) WithValues(keysAndValues ...any) logr.LogSink {
 	return SLogSink{ls.Logger.With(keysAndValues...)}
 }
 
